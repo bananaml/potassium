@@ -23,5 +23,6 @@ def handler(cache: dict, json_in: dict) -> dict:
     outputs = model(prompt)
     return {"outputs": outputs}
  
-app.serve()
 
+if __name__ == "__main__":
+    app.serve()
