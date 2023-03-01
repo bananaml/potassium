@@ -1,6 +1,8 @@
 # Potassium
 
-An HTTP server designed for AI, by Banana
+![Potassium (1)](https://user-images.githubusercontent.com/44653944/222016748-ca2c6905-8fd5-4ee5-a68e-7aed48f23436.png)
+
+An HTTP server designed for AI, by [Banana](https://banana.dev)
 
 ### Quickstart
 
