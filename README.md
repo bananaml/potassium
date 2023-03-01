@@ -41,7 +41,8 @@ def handler(cache: dict, json_in: dict) -> dict:
     outputs = model(prompt)
     return {"outputs": outputs}
 
-app.serve()
+if __name__ == "__main__":
+    app.serve()
 ```
 
 This runs a Huggingface BERT model.
@@ -126,6 +127,10 @@ The `@app.handler` decorated function runs for every http call, and is used to r
 | json_out   | dict | The json body to return to the client. If using the Banana client SDK, this is the same as model_outputs |
 
 There may only be one `@app.handler` function.
+
+### app.serve
+
+`app.serve` starts the server and blocks
 
 ### app.set_cache()
 
