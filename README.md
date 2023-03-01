@@ -65,7 +65,7 @@ curl -X POST -H "Content-Type: application/json" -d '{"prompt": "Hello I am a [M
 
 # Documentation
 
-### potassium.Banana
+### potassium.Potassium
 
 ```python
 from potassium import Potassium
