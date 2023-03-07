@@ -2,9 +2,16 @@
 
 ![Potassium (1)](https://user-images.githubusercontent.com/44653944/222016748-ca2c6905-8fd5-4ee5-a68e-7aed48f23436.png)
 
-An HTTP server designed for AI, by [Banana](https://banana.dev)
+Potassium is an HTTP server framework designed for AI inference, by [Banana](https://banana.dev).
 
-### Quickstart
+Potassium builds in best practices for on-GPU latency-critical serving, such as:
+- Preloading models into memory
+- Buffering calls into a single worker queue to prevent multithreading CUDA errors
+- (much more to come)
+
+---
+
+## Quickstart: Serving a Huggingface BERT model
 
 Install the potassium package
 
@@ -66,7 +73,7 @@ curl -X POST -H "Content-Type: application/json" -d '{"prompt": "Hello I am a [M
 
 # Documentation
 
-### potassium.Potassium
+## potassium.Potassium
 
 ```python
 from potassium import Potassium
@@ -76,9 +83,11 @@ app = Potassium("server")
 
 This instantiates your HTTP app, similar to popular frameworks like [Flask](https://flask.palletsprojects.com/en/2.2.x/_)
 
-This HTTP server is production-ready out of the box.
+This HTTP server is production-ready out of the box, with a built-in queue to safely handle concurrent requests.
 
-### @app.init
+---
+
+## @app.init
 
 ```python
 @app.init
@@ -103,7 +112,9 @@ Once initialized, you must save those variables to the cache with `app.set_cache
 
 There may only be one `@app.init` function.
 
-### @app.handler
+---
+
+## @app.handler
 
 ```python
 @app.handler
@@ -117,22 +128,26 @@ def handler(cache: dict, json_in: dict) -> dict:
 
 The `@app.handler` decorated function runs for every http call, and is used to run inference or training workloads against your model(s).
 
-| Arg     | Type | Description                                                                                       |
+| Args     | Type | Description                                                                                       |
 | ------- | ---- | ------------------------------------------------------------------------------------------------- |
 | cache   | dict | The app's cache, set with set_cache()                                                             |
 | json_in | dict | The json body of the input call. If using the Banana client SDK, this is the same as model_inputs |
 
-| Return Val | Type | Description                                                                                              |
+| Return | Type | Description                                                                                              |
 | ---------- | ---- | -------------------------------------------------------------------------------------------------------- |
 | json_out   | dict | The json body to return to the client. If using the Banana client SDK, this is the same as model_outputs |
 
 There may only be one `@app.handler` function.
 
-### app.serve
+---
+
+## app.serve
 
 `app.serve` starts the server and blocks
 
-### app.set_cache()
+---
+
+## app.set_cache()
 
 ```python
 app.set_cache({})
@@ -142,7 +157,9 @@ app.set_cache({})
 
 `app.set_cache` overwrites any preexisting cache.
 
-### app.get_cache()
+---
+
+## app.get_cache()
 
 ```python
 cache = app.get_cache()
@@ -150,7 +167,9 @@ cache = app.get_cache()
 
 `app.get_cache` fetches the dictionary to the app's cache. This value is automatically provided for you as the `cache` argument in the `@app.handler` function.
 
-### app.optimize(model)
+---
+
+## app.optimize(model)
 
 ```python
 model # some pytorch model
