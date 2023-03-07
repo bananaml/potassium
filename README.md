@@ -142,9 +142,9 @@ There may only be one `@app.handler` function.
 
 ---
 
-## app.serve
+## app.serve()
 
-`app.serve` starts the server and blocks
+`app.serve` runs the server, and is a blocking operation.
 
 ---
 
