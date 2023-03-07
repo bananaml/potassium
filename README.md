@@ -19,7 +19,7 @@ Install the potassium package
 pip3 install potassium
 ```
 
-Create a python file called `app.py` with this:
+Create a python file called `app.py` containing:
 
 ```python
 from potassium import Potassium
