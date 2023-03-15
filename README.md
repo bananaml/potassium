@@ -180,3 +180,17 @@ app.optimize(model)
 `app.optimize` is a feature specific to users hosting on [Banana's serverless GPU infrastructure](https://banana.dev). It is run during buildtime rather than runtime, and is used to locate the model(s) to be targeted for Banana's Fastboot optimization.
 
 Multiple models may be optimized. Only Pytorch models are currently supported.
+
+---
+
+## @app.result_webhook(url)
+
+```python
+@app.handler
+@app.result_webhook(url="http://localhost:8001/")
+def handler(cache: dict, json_in: dict) -> dict:
+    # ...
+    return {"outputs": outputs}
+```
+
+`app.result_webhook` is an optional decorator for the handler function. If added, it posts the handler return json onward to the given webhook url.
