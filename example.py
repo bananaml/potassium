@@ -15,6 +15,7 @@ def init():
         "model": model
     })
 
+@app.result_webhook(url="http://localhost:8001/")
 @app.handler
 def handler(cache: dict, json_in: dict) -> dict:
     prompt = json_in.get('prompt', None)
