@@ -22,6 +22,10 @@ Potassium optionally works in tandem with other tools:
     - Build system: compiles models to be as fast / inexpensive as possible
     - Serverless infra: infrastructure that scales from zero with minimal cold-boots
 
+### Stability Note:
+- This is a v0 release, meaning it is not stable and the interface may change in future versions without notice.
+- This release is currently runnable on Banana Serverless (as is any custom code), but coldboot optimizations are not yet supported for Potassium apps. 
+
 ---
 
 ## Quickstart: Serving a Huggingface BERT model
