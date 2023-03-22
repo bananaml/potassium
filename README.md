@@ -2,12 +2,25 @@
 
 ![Potassium (1)](https://user-images.githubusercontent.com/44653944/222016748-ca2c6905-8fd5-4ee5-a68e-7aed48f23436.png)
 
-Potassium is an HTTP server framework designed for AI inference, by [Banana](https://banana.dev).
+[Potassium](https://github.com/bananaml/potassium) is an open source web framework, built to tackle the unique challenges of serving custom models in production.
 
-Potassium builds in best practices for on-GPU latency-critical serving, such as:
-- Preloading models into memory
-- Buffering calls into a single worker queue to prevent multithreading CUDA errors
-- (much more to come)
+The goal of this project is to:
+
+- Provide a familiar web framework similar to Flask/FastAPI
+- Bake in best practices for handling large, GPU-bound ML models
+- Provide a set of primitives common in ML serving, such as:
+    - POST request handlers
+    - Websocket / streaming connections
+    - Async handlers w/ webhooks
+- Maintain a standard interface, to allow the code and models to compile to specialized hardware (ideally on Banana Serverless 😉)
+
+Potassium optionally works in tandem with other tools:
+
+- [Banana CLI](https://github.com/bananaml/banana-cli): (open-source) an npm-like CLI for downloading boilerplate, running tests, managing packages, and running hot-reload dev servers to tighten the development loop to milliseconds
+- Banana SDKs: (open-source) clients to call your Potassium backend
+- [Banana Serverless](https://banana.dev): (closed-source) purpose-built hosting for Potassium apps
+    - Build system: compiles models to be as fast / inexpensive as possible
+    - Serverless infra: infrastructure that scales from zero with minimal cold-boots
 
 ---
 
