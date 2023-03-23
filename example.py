@@ -57,34 +57,6 @@ def handler(context: dict, request: Request) -> Response:
         status=200
     )
 
-# # app.async_handler immediately returns success on the trigger call, and runs the handler as a background process.
-# # Any response returned fires as a webhook to the optional result_webhook
-# @app.async_handler(path="/path/to/async", result_webhook = "https://some_backend/")
-# def async_handler(context: dict, request: Request) -> Response:
-#     prompt = request.json.get("prompt")
-#     model = context.get("model")
-
-#     outputs = model(prompt)
-
-#     return Response(
-#         body = {"outputs": outputs}, 
-#         status=200
-#     )
-
-# # app.websocket runs a streaming connection
-# @app.websocket(path="/ws")
-# def websocket(context: dict, request: Request) -> None:
-#     model = context.get("model")
-    
-#     ws = request.ws
-#     while True:
-#         prompt = ws.recv()
-#         outputs = model(prompt)
-#         ws.send(outputs)
-
-#         exit_condition = True
-#         if exit_condition:
-#             return None
 
 if __name__ == "__main__":
     app.serve()

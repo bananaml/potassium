@@ -1,6 +1,5 @@
 import requests
-from sanic import Sanic, log
-from sanic.log import logger
+from sanic import Sanic
 from sanic import json as sanic_json
 from threading import Thread
 import functools
@@ -85,7 +84,6 @@ class Potassium():
         print("\n\n")
 
         sanic_app = Sanic(self.name)
-        
         # transform our potassium paths into sanic paths
         for path, endpoint in self.endpoints.items():
             
