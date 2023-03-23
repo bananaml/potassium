@@ -1,14 +1,31 @@
 import requests
-from sanic import Sanic
+from sanic import Sanic, log
+from sanic.log import logger
 from sanic import json as sanic_json
+from threading import Thread
 import functools
 
 def forward_to_webhook(url: str, json_out: dict):
     try:
         res = requests.post(url, json=json_out)
-        print("Webhook status code:", res.status_code)
-    except:
-        print("Webhook failed")
+    except Exception as e:
+        pass
+
+class Endpoint():
+    def __init__(self, type, func, result_webhook = None):
+        self.type = type
+        self.func = func
+        self.result_webhook = result_webhook
+
+class Request():
+    def __init__(self, json:dict, ws = None):
+        self.json = json
+        self.ws = ws
+
+class Response():
+    def __init__(self, status:int, json:dict):
+        self.json = json
+        self.status = status
 
 class Potassium():
     def __init__(self, name, mode = "serve"):
@@ -16,73 +33,93 @@ class Potassium():
             return
         self.name = name
         self.mode = mode
-        self.handler_func = None
         self.init_func = default_func
-        self.webhook_url = None
-        self.to_optimize = []
-        self.cache = {}
+        self.endpoints = {} # dictionary to store unlimited Endpoints, by unique route
+        self.context = {}
 
     # init runs once on server start
     def init(self, func): 
         def wrapper():
-            func()
+            self.context = func()
         self.init_func=wrapper
         return wrapper
-
-    # handler runs for every call
-    def handler(self, func):
-        def wrapper(json_in):
-            # send in app's stateful cache
-            return func(self.cache, json_in)
-        self.handler_func=wrapper
-        return wrapper
-
-    # result_webhook forwards a handler's output to a URL
-    def result_webhook(self, url):  
-        # Wrap underlying function and don't modify behavior
+    
+    # handler is a blocking http POST handler
+    def handler(self, path = "/"):
         def actual_decorator(func):
             @functools.wraps(func)
-            def wrapper(*args, **kwargs):
-                return func(*args, **kwargs)
+            def wrapper(request):
+                # send in app's stateful context, and the request
+                return func(self.context, request)
+            self.endpoints[path] = Endpoint(type="handler", func=wrapper)
             return wrapper
-        
-        self.webhook_url = url
         return actual_decorator
-
-    # optional util
-    # optimize flags pytorch model objects for builtime optimization
-    def optimize(self, model):
-        # only run in optimization mode
-        if self.mode != "optimize":
-            return
-        print("Registering model for optimization")
-        self.to_optimize_.append(model)
+    
+    # async_handler is a non-blocking http POST handler
+    def async_handler(self, path: str = "/", result_webhook:str = None):
+        def actual_decorator(func):
+            @functools.wraps(func)
+            def wrapper(request):
+                # send in app's stateful context, and the request
+                return func(self.context, request)
+            self.endpoints[path] = Endpoint(type="async_handler", func=wrapper, result_webhook=result_webhook)
+            return wrapper
+        return actual_decorator
     
     # optional util
-    # set_cache sets the global cache. This overwrites the prior cache dictionary
-    def set_cache(self, val:dict):
-        self.cache = val
+    # set_context sets the app's context. This overwrites the prior context dictionary
+    def set_context(self, val:dict):
+        self.context = val
 
     # optional util
-    # set_cache sets the global cache. This overwrites the prior cache dictionary
-    def get_cache(self):
-        return self.cache
+    # get_context gets the app's context
+    def get_context(self):
+        return self.context
 
     # serve runs the http server
     def serve(self):
         print("🍌 Starting Potassium Server")        
-        if self.webhook_url != None:
-            print("🍌 Webhook enabled: Handler results will POST to:", self.webhook_url)
         print("🍌 Init...")
         self.init_func()
         print("🍌 Serving... (Yay!)")
         print("\n\n")
-        sanic_app = Sanic(self.name)
-        @sanic_app.post('/')
-        def handler_wrapper(request):
-            json_out = self.handler_func(request.json)
-            if self.webhook_url != None:
-                forward_to_webhook(self.webhook_url, json_out)
-            return sanic_json(json_out)
 
-        sanic_app.run()
+        sanic_app = Sanic(self.name)
+        
+        # transform our potassium paths into sanic paths
+        for path, endpoint in self.endpoints.items():
+            
+            # handler primative
+            if endpoint.type == "handler":
+                @sanic_app.post(path)
+                def handler_wrapper(req):
+                    request = Request(
+                        json = req.json
+                    )
+                    # run the respective potassium endpoint at that path
+                    # note: we must use the dynamic sanic req.path from runtime, since the "path" varable from our own .items() for loop overwrites itself as it iterates
+                    response = self.endpoints[req.path].func(request)
+                    return sanic_json(response.json)
+                
+            if endpoint.type == "async_handler":
+                @sanic_app.post(path)
+                def handler_wrapper(req):
+                    request = Request(
+                        json = req.json
+                    )
+                    
+                    # run as threaded task
+                    def task(func, request, webhook):
+                        response = func(request)
+                        # Post results onward if webhook configured
+                        if webhook != None:
+                            forward_to_webhook(webhook, response.json)
+
+                    endpoint = self.endpoints[req.path]
+                    thread = Thread(target=task, args=(endpoint.func, request, endpoint.result_webhook))
+                    thread.start()
+
+                    # send task start success message
+                    return sanic_json({"started": True})
+
+        sanic_app.run(motd=False)
