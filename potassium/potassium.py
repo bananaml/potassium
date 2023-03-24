@@ -121,5 +121,5 @@ class Potassium():
         self.init_func()
         flask_app = self._create_flask_app()
         server = make_server('localhost', 8000, flask_app)
-        print(colored("Serving on http://localhost:8000\n------", 'green'))
+        print(colored("Serving at http://localhost:8000\n------", 'green'))
         server.serve_forever()
