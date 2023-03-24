@@ -80,6 +80,7 @@ def init():
 
     return context
 
+# @app.handler is an http post handler running for every call
 @app.handler()
 def handler(context: dict, request: Request) -> Response:
     
@@ -180,26 +181,27 @@ Note: Banana serverless currently only supports handlers at the root "/"
 
 ---
 
-## @app.async_handler(path="/async", result_webhook="http://localhost:8001)
+## @app.async_handler(path="/async")
 
 ```python
-@app.handler("/")
+@app.async_handler("/async")
 def handler(context: dict, request: Request) -> Response:
-    
+
     prompt = request.json.get("prompt")
     model = context.get("model")
     outputs = model(prompt)
 
-    return Response(
-        json = {"outputs": outputs}, 
-        status=200
-    )
+    send_webhook(url="http://localhost:8001", json={"outputs": outputs})
+
+    return
 ```
 
-The `@app.handler()` decorated function runs for every http call, and is used to run inference or training workloads against your model(s).
+The `@app.async_handler()` decorated function runs a nonblocking job in the background, for tasks where results aren't expected to return clientside. It's on you to forward the data to wherever you please. Potassium supplies a `send_webhook()` helper function for POSTing data onward to a url, or you may add your own custom upload/pipeline code.
 
-You may configure as many `@app.handler` functions as you'd like, with unique API routes.
-Note: Banana serverless currently only supports handlers at the root "/"
+When invoked, the client immediately returns a `{"success": true}` message.
+
+You may configure as many `@app.async_handler` functions as you'd like, with unique API routes.
+Note: Banana serverless isn't perfectly stable running async_handler. You can use it, but concurrency may be weird.
 
 
 ---
@@ -207,25 +209,3 @@ Note: Banana serverless currently only supports handlers at the root "/"
 ## app.serve()
 
 `app.serve` runs the server, and is a blocking operation.
-
----
-
-## @app.result_webhook(url)
-
-```python
-@app.async_handler("/async", result_webhook="http://localhost:8001")
-def handler(context: dict, request: Request) -> Response:
-    
-    ...
-    
-    # if result_webhook is configured, this Response JSON posts onward to it
-    return Response(
-        json = {"outputs": outputs}, 
-        status=200
-    )
-```
-The `@app.async_handler()` decorated function runs a nonblocking job in the background, for tasks where results aren't expected to return clientside. 
-
-You may choose to include the optional `result_webhook` argument, which forwards the response JSON onward to your given URL, or you may add in whatever result uploading/pipelining code you wish in the handler and return `None`.
-
-When invoked, the client immediately returns a `{"success": true}` message.
