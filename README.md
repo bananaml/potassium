@@ -12,25 +12,46 @@ The goal of this project is to:
     - POST request handlers
     - Websocket / streaming connections
     - Async handlers w/ webhooks
-- Maintain a standard interface, to allow the code and models to compile to specialized hardware (ideally on Banana Serverless 😉)
-
-Potassium optionally works in tandem with other tools:
-
-- [Banana CLI](https://github.com/bananaml/banana-cli): (open-source) an npm-like CLI for downloading boilerplate, running tests, managing packages, and running hot-reload dev servers to tighten the development loop to milliseconds
-- Banana SDKs: (open-source) clients to call your Potassium backend
-- [Banana Serverless](https://banana.dev): (closed-source) purpose-built hosting for Potassium apps
-    - Build system: compiles models to be as fast / inexpensive as possible
-    - Serverless infra: infrastructure that scales from zero with minimal cold-boots
+- Maintain a standard interface, to allow the code and models to compile to specialized hardware (ideally on [Banana Serverless GPUs](https://banana.dev) 😉)
 
 ### Stability Note:
-- This is a v0 release, meaning it is not stable and the interface may change in future versions without notice.
-- This release is currently runnable on Banana Serverless (as is any custom code), but coldboot optimizations are not yet supported for Potassium apps. 
+- This is a v0 release using SemVer, and is not stable; the interface may change at any time. Be sure to lock your versions!
 
 ---
 
 ## Quickstart: Serving a Huggingface BERT model
 
-Install the potassium package
+The fastest way to get up and running is to use the [Banana CLI](https://github.com/bananaml/banana-cli), which downloads and runs your first model.
+
+[Here's a demo video](https://www.loom.com/share/86d4e7b0801549b9ab2f7a1acce772aa)
+
+
+1. Install the CLI with pip
+```bash
+pip3 install banana-cli==0.0.9
+```
+This downloads boilerplate for your potassium app, and automatically installs potassium into the venv.
+
+2. Create a new project directory with 
+```bash
+banana init my-app
+cd my-app
+```
+3. Start the hot-reload dev server
+```bash
+banana dev
+```
+
+4. Call your API (from a separate terminal)
+```bash
+curl -X POST -H "Content-Type: application/json" -d '{"prompt": "Hello I am a [MASK] model."}' http://localhost:8000/
+``` 
+
+---
+
+## Or do it yourself:
+
+1. Install the potassium package
 
 ```bash
 pip3 install potassium
@@ -39,31 +60,37 @@ pip3 install potassium
 Create a python file called `app.py` containing:
 
 ```python
-from potassium import Potassium
-
+from potassium import Potassium, Request, Response
 from transformers import pipeline
 import torch
+import time
 
-app = Potassium("server")
+app = Potassium("my_app")
 
+# @app.init runs at startup, and initializes the app's context
 @app.init
 def init():
     device = 0 if torch.cuda.is_available() else -1
     model = pipeline('fill-mask', model='bert-base-uncased', device=device)
+   
+    context = {
+        "model": model,
+        "hello": "world"
+    }
 
-    app.optimize(model)
+    return context
 
-    return app.set_cache({
-        "model": model
-    })
-
-@app.handler
-def handler(cache: dict, json_in: dict) -> dict:
-    prompt = json_in.get('prompt', None)
-    model = cache.get("model")
-
+@app.handler()
+def handler(context: dict, request: Request) -> Response:
+    
+    prompt = request.json.get("prompt")
+    model = context.get("model")
     outputs = model(prompt)
-    return {"outputs": outputs}
+
+    return Response(
+        json = {"outputs": outputs}, 
+        status=200
+    )
 
 if __name__ == "__main__":
     app.serve()
@@ -89,6 +116,8 @@ Test the running server with:
 curl -X POST -H "Content-Type: application/json" -d '{"prompt": "Hello I am a [MASK] model."}' http://localhost:8000
 ```
 
+---
+
 # Documentation
 
 ## potassium.Potassium
@@ -113,11 +142,9 @@ def init():
     device = 0 if torch.cuda.is_available() else -1
     model = pipeline('fill-mask', model='bert-base-uncased', device=device)
 
-    app.optimize(model)
-
-    return app.set_cache({
+    return {
         "model": model
-    })
+    }
 ```
 
 The `@app.init` decorated function runs once on server startup, and is used to load any reuseable, heavy objects such as:
@@ -126,36 +153,56 @@ The `@app.init` decorated function runs once on server startup, and is used to l
 - Tokenizers
 - Precalculated embeddings
 
-Once initialized, you must save those variables to the cache with `app.set_cache({})` so they can be referenced later.
+The return value is a dictionary which saves to the app's `context`, and is used later in the handler functions.
 
 There may only be one `@app.init` function.
 
 ---
 
-## @app.handler
+## @app.handler()
 
 ```python
-@app.handler
-def handler(cache: dict, json_in: dict) -> dict:
-    prompt = json_in.get('prompt', None)
-    model = cache.get("model")
-
+@app.handler("/")
+def handler(context: dict, request: Request) -> Response:
+    
+    prompt = request.json.get("prompt")
+    model = context.get("model")
     outputs = model(prompt)
-    return {"outputs": outputs}
+
+    return Response(
+        json = {"outputs": outputs}, 
+        status=200
+    )
 ```
 
 The `@app.handler` decorated function runs for every http call, and is used to run inference or training workloads against your model(s).
 
-| Args     | Type | Description                                                                                       |
-| ------- | ---- | ------------------------------------------------------------------------------------------------- |
-| cache   | dict | The app's cache, set with set_cache()                                                             |
-| json_in | dict | The json body of the input call. If using the Banana client SDK, this is the same as model_inputs |
+You may configure as many `@app.handler` functions as you'd like, with unique API routes.
+Note: Banana serverless currently only supports handlers at the root "/"
 
-| Return | Type | Description                                                                                              |
-| ---------- | ---- | -------------------------------------------------------------------------------------------------------- |
-| json_out   | dict | The json body to return to the client. If using the Banana client SDK, this is the same as model_outputs |
+---
 
-There may only be one `@app.handler` function.
+## @app.async_handler(path="/async", result_webhook="http://localhost:8001)
+
+```python
+@app.handler("/")
+def handler(context: dict, request: Request) -> Response:
+    
+    prompt = request.json.get("prompt")
+    model = context.get("model")
+    outputs = model(prompt)
+
+    return Response(
+        json = {"outputs": outputs}, 
+        status=200
+    )
+```
+
+The `@app.handler()` decorated function runs for every http call, and is used to run inference or training workloads against your model(s).
+
+You may configure as many `@app.handler` functions as you'd like, with unique API routes.
+Note: Banana serverless currently only supports handlers at the root "/"
+
 
 ---
 
@@ -165,49 +212,22 @@ There may only be one `@app.handler` function.
 
 ---
 
-## app.set_cache()
-
-```python
-app.set_cache({})
-```
-
-`app.set_cache` saves the input dictionary to the app's cache, for reuse in future calls. It may be used in both the `@app.init` and `@app.handler` functions.
-
-`app.set_cache` overwrites any preexisting cache.
-
----
-
-## app.get_cache()
-
-```python
-cache = app.get_cache()
-```
-
-`app.get_cache` fetches the dictionary to the app's cache. This value is automatically provided for you as the `cache` argument in the `@app.handler` function.
-
----
-
-## app.optimize(model)
-
-```python
-model # some pytorch model
-app.optimize(model)
-```
-
-`app.optimize` is a feature specific to users hosting on [Banana's serverless GPU infrastructure](https://banana.dev). It is run during buildtime rather than runtime, and is used to locate the model(s) to be targeted for Banana's Fastboot optimization.
-
-Multiple models may be optimized. Only Pytorch models are currently supported.
-
----
-
 ## @app.result_webhook(url)
 
 ```python
-@app.handler
-@app.result_webhook(url="http://localhost:8001/")
-def handler(cache: dict, json_in: dict) -> dict:
-    # ...
-    return {"outputs": outputs}
+@app.async_handler("/async", result_webhook="http://localhost:8001")
+def handler(context: dict, request: Request) -> Response:
+    
+    ...
+    
+    # if result_webhook is configured, this Response JSON posts onward to it
+    return Response(
+        json = {"outputs": outputs}, 
+        status=200
+    )
 ```
+The `@app.async_handler()` decorated function runs a nonblocking job in the background, for tasks where results aren't expected to return clientside. 
 
-`app.result_webhook` is an optional decorator for the handler function. If added, it posts the handler return json onward to the given webhook url.
+You may choose to include the optional `result_webhook` argument, which forwards the response JSON onward to your given URL, or you may add in whatever result uploading/pipelining code you wish in the handler and return `None`.
+
+When invoked, the client immediately returns a `{"success": true}` message.
