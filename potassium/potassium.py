@@ -7,7 +7,7 @@ import functools
 from termcolor import colored
 
 class Endpoint():
-    def __init__(self, type, func, result_webhook = None):
+    def __init__(self, type, func):
         self.type = type
         self.func = func
 
