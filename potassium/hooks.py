@@ -1,5 +1,4 @@
 import requests
-import logging
 
 def send_webhook(url: str, json: dict):
     try:
