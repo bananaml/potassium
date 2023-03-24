@@ -1,9 +1,10 @@
 import requests
-from sanic import Sanic, log
-from sanic.log import logger
-from sanic import json as sanic_json
+from flask import Flask
+from flask import request, abort
+from werkzeug.serving import make_server
 from threading import Thread
 import functools
+from termcolor import colored
 
 def forward_to_webhook(url: str, json_out: dict):
     try:
@@ -45,24 +46,24 @@ class Potassium():
         return wrapper
     
     # handler is a blocking http POST handler
-    def handler(self, path = "/"):
+    def handler(self, route = "/"):
         def actual_decorator(func):
             @functools.wraps(func)
             def wrapper(request):
                 # send in app's stateful context, and the request
                 return func(self.context, request)
-            self.endpoints[path] = Endpoint(type="handler", func=wrapper)
+            self.endpoints[route] = Endpoint(type="handler", func=wrapper)
             return wrapper
         return actual_decorator
     
     # async_handler is a non-blocking http POST handler
-    def async_handler(self, path: str = "/", result_webhook:str = None):
+    def async_handler(self, route: str = "/", result_webhook:str = None):
         def actual_decorator(func):
             @functools.wraps(func)
             def wrapper(request):
                 # send in app's stateful context, and the request
                 return func(self.context, request)
-            self.endpoints[path] = Endpoint(type="async_handler", func=wrapper, result_webhook=result_webhook)
+            self.endpoints[route] = Endpoint(type="async_handler", func=wrapper, result_webhook=result_webhook)
             return wrapper
         return actual_decorator
     
@@ -75,51 +76,50 @@ class Potassium():
     # get_context gets the app's context
     def get_context(self):
         return self.context
+    
+    def _create_flask_app(self):
+        flask_app = Flask(__name__)
+
+        # ingest into single endpoint and spread out to multiple downstream funcs
+        @flask_app.route('/', defaults={'path': ''}, methods=["POST"])
+        @flask_app.route('/<path:path>', methods=["POST"])
+        def handle(path):
+            route = "/" + path
+            if route not in self.endpoints:
+                abort(404)
+
+            endpoint = self.endpoints[route]
+
+            if endpoint.type == "handler":
+                req = Request(
+                    json = request.get_json()
+                )
+                return endpoint.func(req).json
+            
+            if endpoint.type == "async_handler":
+                req = Request(
+                    json = request.get_json()
+                )
+                # run as threaded task
+                def task(func, req, webhook):
+                    response = func(req)
+                    # Post results onward if webhook configured
+                    if webhook != None:
+                        forward_to_webhook(webhook, response.json)
+                thread = Thread(target=task, args=(endpoint.func, req, endpoint.result_webhook))
+                thread.start()
+
+                # send task start success message
+                return {"started": True}
+            
+        return flask_app
 
     # serve runs the http server
     def serve(self):
-        print("🍌 Starting Potassium Server")        
-        print("🍌 Init...")
+        print(colored("------\nStarting Potassium Server 🍌", 'yellow'))   
+        print(colored("Running init()", 'yellow'))
         self.init_func()
-        print("🍌 Serving... (Yay!)")
-        print("\n\n")
-
-        sanic_app = Sanic(self.name)
-        
-        # transform our potassium paths into sanic paths
-        for path, endpoint in self.endpoints.items():
-            
-            # handler primative
-            if endpoint.type == "handler":
-                @sanic_app.post(path)
-                def handler_wrapper(req):
-                    request = Request(
-                        json = req.json
-                    )
-                    # run the respective potassium endpoint at that path
-                    # note: we must use the dynamic sanic req.path from runtime, since the "path" varable from our own .items() for loop overwrites itself as it iterates
-                    response = self.endpoints[req.path].func(request)
-                    return sanic_json(response.json)
-                
-            if endpoint.type == "async_handler":
-                @sanic_app.post(path)
-                def handler_wrapper(req):
-                    request = Request(
-                        json = req.json
-                    )
-                    
-                    # run as threaded task
-                    def task(func, request, webhook):
-                        response = func(request)
-                        # Post results onward if webhook configured
-                        if webhook != None:
-                            forward_to_webhook(webhook, response.json)
-
-                    endpoint = self.endpoints[req.path]
-                    thread = Thread(target=task, args=(endpoint.func, request, endpoint.result_webhook))
-                    thread.start()
-
-                    # send task start success message
-                    return sanic_json({"started": True})
-
-        sanic_app.run(motd=False)
+        flask_app = self._create_flask_app()
+        server = make_server('localhost', 8000, flask_app)
+        print(colored("Serving at http://localhost:8000\n------", 'green'))
+        server.serve_forever()
