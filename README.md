@@ -130,8 +130,6 @@ app = Potassium("server")
 
 This instantiates your HTTP app, similar to popular frameworks like [Flask](https://flask.palletsprojects.com/en/2.2.x/_)
 
-This HTTP server is production-ready out of the box, with a built-in queue to safely handle concurrent requests.
-
 ---
 
 ## @app.init
