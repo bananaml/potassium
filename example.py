@@ -1,4 +1,4 @@
-from potassium import Potassium, Request, Response
+from potassium import Potassium, Request, Response, send_webhook
 from transformers import pipeline
 import torch
 import time
@@ -30,21 +30,18 @@ def handler(context: dict, request: Request) -> Response:
         status=200
     )
 
-@app.async_handler("/async", result_webhook="http://localhost:8001")
+@app.async_handler("/async")
 def handler(context: dict, request: Request) -> Response:
 
-    time.sleep(10)
+    time.sleep(2)
 
     prompt = request.json.get("prompt")
     model = context.get("model")
     outputs = model(prompt)
-    print("async done")
 
-    return Response(
-        json = {"outputs": outputs}, 
-        status=200
-    )
+    send_webhook(url="http://localhost:8001", json={"outputs": outputs})
 
+    return
 
 if __name__ == "__main__":
     app.serve()

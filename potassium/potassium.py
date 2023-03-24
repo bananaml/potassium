@@ -6,17 +6,10 @@ from threading import Thread
 import functools
 from termcolor import colored
 
-def forward_to_webhook(url: str, json_out: dict):
-    try:
-        res = requests.post(url, json=json_out)
-    except Exception as e:
-        pass
-
 class Endpoint():
-    def __init__(self, type, func, result_webhook = None):
+    def __init__(self, type, func):
         self.type = type
         self.func = func
-        self.result_webhook = result_webhook
 
 class Request():
     def __init__(self, json:dict, ws = None):
@@ -29,11 +22,10 @@ class Response():
         self.status = status
 
 class Potassium():
-    def __init__(self, name, mode = "serve"):
+    def __init__(self, name):
         def default_func():
             return
         self.name = name
-        self.mode = mode
         self.init_func = default_func
         self.endpoints = {} # dictionary to store unlimited Endpoints, by unique route
         self.context = {}
@@ -57,13 +49,13 @@ class Potassium():
         return actual_decorator
     
     # async_handler is a non-blocking http POST handler
-    def async_handler(self, route: str = "/", result_webhook:str = None):
+    def async_handler(self, route: str = "/"):
         def actual_decorator(func):
             @functools.wraps(func)
             def wrapper(request):
                 # send in app's stateful context, and the request
                 return func(self.context, request)
-            self.endpoints[route] = Endpoint(type="async_handler", func=wrapper, result_webhook=result_webhook)
+            self.endpoints[route] = Endpoint(type="async_handler", func=wrapper)
             return wrapper
         return actual_decorator
     
@@ -101,12 +93,10 @@ class Potassium():
                     json = request.get_json()
                 )
                 # run as threaded task
-                def task(func, req, webhook):
+                def task(func, req):
                     response = func(req)
-                    # Post results onward if webhook configured
-                    if webhook != None:
-                        forward_to_webhook(webhook, response.json)
-                thread = Thread(target=task, args=(endpoint.func, req, endpoint.result_webhook))
+                    # we currently do nothing with the response
+                thread = Thread(target=task, args=(endpoint.func, req))
                 thread.start()
 
                 # send task start success message
@@ -115,11 +105,11 @@ class Potassium():
         return flask_app
 
     # serve runs the http server
-    def serve(self):
+    def serve(self, port = 8000):
         print(colored("------\nStarting Potassium Server 🍌", 'yellow'))   
         print(colored("Running init()", 'yellow'))
         self.init_func()
         flask_app = self._create_flask_app()
-        server = make_server('localhost', 8000, flask_app)
+        server = make_server('localhost', port, flask_app)
         print(colored("Serving at http://localhost:8000\n------", 'green'))
         server.serve_forever()
