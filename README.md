@@ -14,8 +14,9 @@ The goal of this project is to:
     - Async handlers w/ webhooks
 - Maintain a standard interface, to allow the code and models to compile to specialized hardware (ideally on [Banana Serverless GPUs](https://banana.dev) 😉)
 
-### Stability Note:
+### Stability Notes:
 - This is a v0 release using SemVer, and is not stable; the interface may change at any time. Be sure to lock your versions!
+- If deploying to Banana, Potassium apps currently won't receive [fast boot optimizations](https://docs.banana.dev/banana-docs/core-concepts/build-system). This will be added within a few days.
 
 ---
 
