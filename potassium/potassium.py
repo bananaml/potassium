@@ -105,11 +105,11 @@ class Potassium():
         return flask_app
 
     # serve runs the http server
-    def serve(self, port = 8000):
+    def serve(self, host="0.0.0.0", port = 8000):
         print(colored("------\nStarting Potassium Server 🍌", 'yellow'))   
         print(colored("Running init()", 'yellow'))
         self.init_func()
         flask_app = self._create_flask_app()
-        server = make_server('localhost', port, flask_app)
-        print(colored("Serving at http://localhost:8000\n------", 'green'))
+        server = make_server(host, port, flask_app)
+        print(colored(f"Serving at http://{host}:{port}\n------", 'green'))
         server.serve_forever()
