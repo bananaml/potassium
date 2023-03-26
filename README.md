@@ -29,7 +29,7 @@ The fastest way to get up and running is to use the [Banana CLI](https://github.
 
 1. Install the CLI with pip
 ```bash
-pip3 install banana-cli==0.0.9
+pip3 install banana-cli
 ```
 This downloads boilerplate for your potassium app, and automatically installs potassium into the venv.
 
