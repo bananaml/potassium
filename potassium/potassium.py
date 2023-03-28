@@ -1,4 +1,4 @@
-import requests
+from .internals import find_models
 from flask import Flask
 from flask import request, abort
 from werkzeug.serving import make_server
@@ -29,11 +29,13 @@ class Potassium():
         self.init_func = default_func
         self.endpoints = {} # dictionary to store unlimited Endpoints, by unique route
         self.context = {}
+        self._models = []
 
     # init runs once on server start
     def init(self, func): 
         def wrapper():
             self.context = func()
+            self._models = find_models(self.context)
         self.init_func=wrapper
         return wrapper
     
@@ -105,10 +107,11 @@ class Potassium():
         return flask_app
 
     # serve runs the http server
-    def serve(self, host="0.0.0.0", port = 8000):
+    def serve(self, host="0.0.0.0", port = 8000, _init=True):
         print(colored("------\nStarting Potassium Server 🍌", 'yellow'))   
         print(colored("Running init()", 'yellow'))
-        self.init_func()
+        if _init:
+            self.init_func()
         flask_app = self._create_flask_app()
         server = make_server(host, port, flask_app)
         print(colored(f"Serving at http://{host}:{port}\n------", 'green'))
