@@ -17,22 +17,8 @@ except:
 
 def find_models(context: dict):
     models = []
-    print("Performing model auto-detection")
     drill_dict(context, [], models)
-
-    print(f"\nFound {len(models)} model objects:")
-    for target in models:
-        parse_string = "context"
-        for path in target["context_path"]:
-            if isinstance(path, int):
-                parse_string += f"[{path}]"
-            if isinstance(path, str):
-                parse_string += f'["{path}"]'
-        print(parse_string)
-        model_obj = target["model"]
-        # optimize(model_obj)
-    
-    return []
+    return models
 
 def assess(item, path, opt_targets):
 
