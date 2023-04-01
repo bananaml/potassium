@@ -16,7 +16,6 @@ The goal of this project is to:
 
 ### Stability Notes:
 - This is a v0 release using SemVer, and is not stable; the interface may change at any time. Be sure to lock your versions!
-- If deploying to Banana, Potassium apps currently won't receive [fast boot optimizations](https://docs.banana.dev/banana-docs/core-concepts/build-system). This will be added within a few days.
 
 ---
 
