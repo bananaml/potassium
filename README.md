@@ -15,7 +15,7 @@ The goal of this project is to:
 - Maintain a standard interface, to allow the code and models to compile to specialized hardware (ideally on [Banana Serverless GPUs](https://banana.dev) 😉)
 
 ### Stability Notes:
-- This is a v0 release using SemVer, and is not stable; the interface may change at any time. Be sure to lock your versions!
+Potassium uses Semantic Versioning, in that major versions imply breaking changes, and v0 implies instability even between minor/patch versions. Be sure to lock your versions, as we're still in v0!
 
 ---
 
