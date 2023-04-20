@@ -67,16 +67,6 @@ class Potassium():
             return wrapper
         return actual_decorator
     
-    # optional util
-    # set_context sets the app's context. This overwrites the prior context dictionary
-    def set_context(self, val:dict):
-        self.context = val
-
-    # optional util
-    # get_context gets the app's context
-    def get_context(self):
-        return self.context
-    
     def _create_flask_app(self):
         flask_app = Flask(__name__)
 
