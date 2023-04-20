@@ -29,6 +29,7 @@ class Potassium():
         self.init_func = default_func
         self.endpoints = {} # dictionary to store unlimited Endpoints, by unique route
         self.context = {}
+        self._working = False
 
     # init runs once on server start
     def init(self, func): 
@@ -48,14 +49,21 @@ class Potassium():
             return wrapper
         return actual_decorator
     
-    # async_handler is a non-blocking http POST handler
-    def async_handler(self, route: str = "/"):
+    # background is a non-blocking http POST handler
+    def background(self, route: str = "/"):
         def actual_decorator(func):
             @functools.wraps(func)
             def wrapper(request):
                 # send in app's stateful context, and the request
-                return func(self.context, request)
-            self.endpoints[route] = Endpoint(type="async_handler", func=wrapper)
+                self._working = True
+                try:
+                    res = func(self.context, request)
+                    self._working = False
+                    return res
+                except Exception as e:
+                    self._working = False
+                    raise e
+            self.endpoints[route] = Endpoint(type="background", func=wrapper)
             return wrapper
         return actual_decorator
     
@@ -88,7 +96,7 @@ class Potassium():
                 )
                 return endpoint.func(req).json
             
-            if endpoint.type == "async_handler":
+            if endpoint.type == "background":
                 req = Request(
                     json = request.get_json()
                 )
