@@ -1,6 +1,5 @@
 import requests
-from flask import Flask
-from flask import request, abort
+from flask import Flask, request, make_response, abort
 from werkzeug.serving import make_server
 from threading import Thread
 import functools
@@ -63,6 +62,7 @@ class Potassium():
                 except Exception as e:
                     self._working = False
                     raise e
+
             self.endpoints[route] = Endpoint(type="background", func=wrapper)
             return wrapper
         return actual_decorator
@@ -94,7 +94,9 @@ class Potassium():
                 req = Request(
                     json = request.get_json()
                 )
-                return endpoint.func(req).json
+                res = make_response(endpoint.func(req).json)
+                res.headers['Endpoint-Type'] = endpoint.type
+                return res
             
             if endpoint.type == "background":
                 req = Request(
@@ -108,7 +110,9 @@ class Potassium():
                 thread.start()
 
                 # send task start success message
-                return {"started": True}
+                res = make_response({"started": True})
+                res.headers['Endpoint-Type'] = endpoint.type
+                return res
             
         return flask_app
 
