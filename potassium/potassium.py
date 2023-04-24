@@ -73,6 +73,7 @@ class Potassium():
                 if self.is_busy():
                     res = make_response()
                     res.status_code = 423
+                    res.headers['X-Endpoint-Type'] = endpoint.type
                     return res
                 with self._lock:
                     response = endpoint.func(req).json
@@ -95,6 +96,7 @@ class Potassium():
                     if self.is_busy():
                         res = make_response()
                         res.status_code = 423
+                        res.headers['X-Endpoint-Type'] = endpoint.type
                         return res
                     with self._lock:
                         endpoint.func(req)
