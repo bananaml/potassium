@@ -81,7 +81,7 @@ class Potassium():
                 response = endpoint.func(req).json
 
             res = make_response(response)
-            res.headers['Endpoint-Type'] = endpoint.type
+            res.headers['X-Endpoint-Type'] = endpoint.type
             return res
         
         if endpoint.type == "background":
@@ -106,7 +106,7 @@ class Potassium():
 
             # send task start success message
             res = make_response({"started": True})
-            res.headers['Endpoint-Type'] = endpoint.type
+            res.headers['X-Endpoint-Type'] = endpoint.type
             return res
         
     def is_busy(self):
