@@ -43,8 +43,10 @@ class Potassium():
         def actual_decorator(func):
             @functools.wraps(func)
             def wrapper(request):
-                # send in app's stateful context, and the request
-                return func(self.context, request)
+                # send in app's stateful context if GPU, and the request
+                if gpu:
+                    return func(self.context, request)
+                return func(None, request)
             self.endpoints[route] = Endpoint(type="handler", func=wrapper, gpu=gpu)
             return wrapper
         return actual_decorator
@@ -54,8 +56,10 @@ class Potassium():
         def actual_decorator(func):
             @functools.wraps(func)
             def wrapper(request):
-                # send in app's stateful context, and the request
-                return func(self.context, request)
+                # send in app's stateful context if GPU, and the request
+                if gpu:
+                    return func(self.context, request)
+                return func(None, request)
             self.endpoints[route] = Endpoint(type="background", func=wrapper, gpu=gpu)
             return wrapper
         return actual_decorator
