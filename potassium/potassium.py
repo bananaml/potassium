@@ -6,10 +6,10 @@ import functools
 from termcolor import colored
 
 class Endpoint():
-    def __init__(self, type, func, threadsafe):
+    def __init__(self, type, func, gpu):
         self.type = type
         self.func = func
-        self.threadsafe = threadsafe
+        self.gpu = gpu
 
 class Request():
     def __init__(self, json:dict, ws = None):
@@ -39,24 +39,24 @@ class Potassium():
         return wrapper
     
     # handler is a blocking http POST handler
-    def handler(self, route: str = "/", threadsafe: bool = True):
+    def handler(self, route: str = "/", gpu: bool = True):
         def actual_decorator(func):
             @functools.wraps(func)
             def wrapper(request):
                 # send in app's stateful context, and the request
                 return func(self.context, request)
-            self.endpoints[route] = Endpoint(type="handler", func=wrapper, threadsafe=threadsafe)
+            self.endpoints[route] = Endpoint(type="handler", func=wrapper, gpu=gpu)
             return wrapper
         return actual_decorator
     
     # background is a non-blocking http POST handler
-    def background(self, route: str = "/", threadsafe: bool = True):
+    def background(self, route: str = "/", gpu: bool = True):
         def actual_decorator(func):
             @functools.wraps(func)
             def wrapper(request):
                 # send in app's stateful context, and the request
                 return func(self.context, request)
-            self.endpoints[route] = Endpoint(type="background", func=wrapper, threadsafe=threadsafe)
+            self.endpoints[route] = Endpoint(type="background", func=wrapper, gpu=gpu)
             return wrapper
         return actual_decorator
     
@@ -67,10 +67,10 @@ class Potassium():
                 json = flask_request.get_json()
             )
 
-            # run in threadsafe lock by default
-            if endpoint.threadsafe:
-                # threadsafe rejects if lock already in use
-                if self.is_busy():
+            # run in gpu lock by default
+            if endpoint.gpu:
+                # gpu rejects if lock already in use
+                if self.is_working():
                     res = make_response()
                     res.status_code = 423
                     res.headers['X-Endpoint-Type'] = endpoint.type
@@ -91,9 +91,9 @@ class Potassium():
             )
             # run as threaded task
             def task(endpoint, req):
-                if endpoint.threadsafe:
-                    # threadsafe rejects if lock already in use
-                    if self.is_busy():
+                if endpoint.gpu:
+                    # gpu rejects if lock already in use
+                    if self.is_working():
                         res = make_response()
                         res.status_code = 423
                         res.headers['X-Endpoint-Type'] = endpoint.type
@@ -111,7 +111,7 @@ class Potassium():
             res.headers['X-Endpoint-Type'] = endpoint.type
             return res
         
-    def is_busy(self):
+    def is_working(self):
         return self._lock.locked()
     
     def _create_flask_app(self):
