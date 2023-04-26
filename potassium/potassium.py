@@ -93,21 +93,24 @@ class Potassium():
             req = Request(
                 json = flask_request.get_json()
             )
+
+            if endpoint.gpu:
+                # gpu rejects if lock already in use
+                if self.is_working():
+                    res = make_response()
+                    res.status_code = 423
+                    res.headers['X-Endpoint-Type'] = endpoint.type
+                    return res
+            
             # run as threaded task
-            def task(endpoint, req):
+            def task(endpoint, lock, req):
                 if endpoint.gpu:
-                    # gpu rejects if lock already in use
-                    if self.is_working():
-                        res = make_response()
-                        res.status_code = 423
-                        res.headers['X-Endpoint-Type'] = endpoint.type
-                        return res
-                    with self._lock:
+                    with lock:
                         endpoint.func(req)
                 else:
                     endpoint.func(req)
                 # we currently do nothing with the response
-            thread = Thread(target=task, args=(endpoint, req))
+            thread = Thread(target=task, args=(endpoint, self._lock, req))
             thread.start()
 
             # send task start success message
