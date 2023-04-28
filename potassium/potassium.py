@@ -4,6 +4,7 @@ from werkzeug.serving import make_server
 from threading import Thread, Lock
 import functools
 from termcolor import colored
+from queue import Queue
 
 class Endpoint():
     def __init__(self, type, func, gpu):
@@ -30,6 +31,7 @@ class Potassium():
         self.endpoints = {} # dictionary to store unlimited Endpoints, by unique route
         self.context = {}
         self._lock = Lock()
+        self.event_chan = Queue(maxsize=1)
 
     # init runs once on server start
     def init(self, func): 
@@ -81,6 +83,7 @@ class Potassium():
                     return res
                 with self._lock:
                     response = endpoint.func(req).json
+                self.event_chan.put(item = True, block=False)
 
             else:
                 response = endpoint.func(req).json
@@ -107,6 +110,7 @@ class Potassium():
                 if endpoint.gpu:
                     with lock:
                         endpoint.func(req)
+                    self.event_chan.put(item = True, block=False)
                 else:
                     endpoint.func(req)
                 # we currently do nothing with the response
@@ -117,6 +121,9 @@ class Potassium():
             res = make_response({"started": True})
             res.headers['X-Endpoint-Type'] = endpoint.type
             return res
+    
+    def read_event_chan(self) -> bool:
+        return self.event_chan.get()
         
     def is_working(self):
         return self._lock.locked()
