@@ -4,7 +4,7 @@ from werkzeug.serving import make_server
 from threading import Thread, Lock
 import functools
 from termcolor import colored
-from queue import Queue
+from queue import Queue, Full
 
 class Endpoint():
     def __init__(self, type, func, gpu):
@@ -83,7 +83,10 @@ class Potassium():
                     return res
                 with self._lock:
                     response = endpoint.func(req).json
-                self.event_chan.put(item = True, block=False)
+                try:
+                    self.event_chan.put(item = True, block=False)
+                except Full:
+                    pass
 
             else:
                 response = endpoint.func(req).json
@@ -110,7 +113,10 @@ class Potassium():
                 if endpoint.gpu:
                     with lock:
                         endpoint.func(req)
-                    self.event_chan.put(item = True, block=False)
+                    try:
+                        self.event_chan.put(item = True, block=False)
+                    except Full:
+                        pass
                 else:
                     endpoint.func(req)
                 # we currently do nothing with the response
