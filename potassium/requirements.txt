@@ -1,3 +1,4 @@
 Flask
 requests
 termcolor
+redis
