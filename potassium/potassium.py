@@ -92,6 +92,7 @@ class Potassium():
                         
                         tb_str = traceback.format_exc()
                         response = tb_str
+                        failed = True
 
                         self.event_chan.put(item = True, block=False)
 
@@ -100,6 +101,8 @@ class Potassium():
 
             res = make_response(response)
             res.headers['X-Endpoint-Type'] = endpoint.type
+            if failed:
+                res.status_code = 500
             return res
         
         if endpoint.type == "background":
@@ -119,7 +122,11 @@ class Potassium():
             def task(endpoint, lock, req):
                 if endpoint.gpu:
                     with lock:
-                        endpoint.func(req)
+                        try:
+                            endpoint.func(req)
+                            self.event_chan.put(item = True, block=False)
+                        except:
+                            self.event_chan.put(item=True, block=False)
                 else:
                     endpoint.func(req)
                 # we currently do nothing with the response
@@ -127,7 +134,7 @@ class Potassium():
             thread.start()
 
             # send task start success message
-            res = make_response({"started": True})
+            res = make_response({'started': True})            
             res.headers['X-Endpoint-Type'] = endpoint.type
             return res
     
