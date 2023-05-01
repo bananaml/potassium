@@ -161,7 +161,7 @@ There may only be one `@app.init` function.
 ## @app.handler()
 
 ```python
-@app.handler("/")
+@app.handler("/", gpu=True)
 def handler(context: dict, request: Request) -> Response:
     
     prompt = request.json.get("prompt")
@@ -177,14 +177,15 @@ def handler(context: dict, request: Request) -> Response:
 The `@app.handler` decorated function runs for every http call, and is used to run inference or training workloads against your model(s).
 
 You may configure as many `@app.handler` functions as you'd like, with unique API routes.
-Note: Banana serverless currently only supports handlers at the root "/"
+
+The `gpu=True` argument allows the handler to access the prewarmed context value, and runs the handler as blocking. While the handler is running, potassium will reject any other `gpu=True` handlers with a 423 Locked error, to ensure that there are no multithreading issues with CUDA. If set to `false`, the handler may be called at any time, but the context provided will be `None`. `gpu` defaults to `True`.
 
 ---
 
-## @app.async_handler(path="/async")
+## @app.background(path="/background", gpu=True)
 
 ```python
-@app.async_handler("/async")
+@app.background("/background")
 def handler(context: dict, request: Request) -> Response:
 
     prompt = request.json.get("prompt")
@@ -196,13 +197,13 @@ def handler(context: dict, request: Request) -> Response:
     return
 ```
 
-The `@app.async_handler()` decorated function runs a nonblocking job in the background, for tasks where results aren't expected to return clientside. It's on you to forward the data to wherever you please. Potassium supplies a `send_webhook()` helper function for POSTing data onward to a url, or you may add your own custom upload/pipeline code.
+The `@app.background()` decorated function runs a nonblocking job in the background, for tasks where results aren't expected to return clientside. It's on you to forward the data to wherever you please. Potassium supplies a `send_webhook()` helper function for POSTing data onward to a url, or you may add your own custom upload/pipeline code.
 
 When invoked, the client immediately returns a `{"success": true}` message.
 
-You may configure as many `@app.async_handler` functions as you'd like, with unique API routes.
-Note: Banana serverless isn't perfectly stable running async_handler. You can use it, but concurrency may be weird.
+You may configure as many `@app.background` functions as you'd like, with unique API routes.
 
+The `gpu=True` argument allows the background handler to access the prewarmed context value, and runs the child background thread as blocking. While the child thread is running, potassium will reject any other `gpu=True` handlers with a 423 Locked error, to ensure that there are no multithreading issues with CUDA. If set to `false`, the handler may be called at any time, but the context provided will be `None`. `gpu` defaults to `True`.
 
 ---
 
