@@ -5,6 +5,8 @@ from threading import Thread, Lock
 import functools
 from queue import Queue, Full
 import traceback
+from termcolor import colored
+
 
 class Endpoint():
     def __init__(self, type, func, gpu):
@@ -73,6 +75,7 @@ class Potassium():
                 json = flask_request.get_json()
             )
 
+            failed = False
             # run in gpu lock by default
             if endpoint.gpu:
             
