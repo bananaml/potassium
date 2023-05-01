@@ -210,3 +210,45 @@ The `gpu=True` argument allows the background handler to access the prewarmed co
 ## app.serve()
 
 `app.serve` runs the server, and is a blocking operation.
+
+
+---
+
+# Store
+Potassium includes a key-value storage primative, to help users persist data between calls. This is often used to implement patterns such as an async-worker queue where one background task runs inference and saves the result to the Store, with another handler set to `gpu=False` built to fetch the result.
+
+Example usage: your own Redis backend (encouraged)
+```
+from potassium.store import Store, RedisConfig
+
+store = Store(
+    backend="redis",
+    config = RedisConfig(
+        host = "localhost",
+        port = 6379
+    )
+)
+
+# in one handler
+store.set("key", "value", ttl=60)
+
+# in another handler
+value = store.get("key")
+```
+
+Example usage: using local storage 
+- Note: not encouraged on Banana serverless or multi-replica environments, as data is stored only on the single replica
+```
+from potassium.store import Store, RedisConfig
+
+store = Store(
+    backend="local"
+)
+
+# in one handler
+store.set("key", "value", ttl=60)
+
+# in another handler
+value = store.get("key")
+```
+
