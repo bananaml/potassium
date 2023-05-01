@@ -1,0 +1,4 @@
+to call:
+
+curl -X POST -H "Content-Type: image/jpeg" --data-binary "@/path/to/my_image.jpg" http://localhost:8000/
+

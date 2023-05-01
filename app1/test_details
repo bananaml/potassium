@@ -1,0 +1,7 @@
+A simple app that loads a pre-trained language model in @app.init and returns some dummy output in @app.handler. This app could help test if the basic functionality of Potassium is working properly.
+
+Test call:
+curl --header "Content-Type: application/json" \
+     --request POST \
+     --data '{"prompt": "The capital of France is [MASK]."}' \
+     http://localhost:8080
