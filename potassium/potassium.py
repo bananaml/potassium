@@ -3,11 +3,8 @@ from flask import Flask, request, make_response, abort
 from werkzeug.serving import make_server
 from threading import Thread, Lock
 import functools
-from termcolor import colored
-from queue import Queue
+from queue import Queue, Full
 import traceback
-
-
 
 class Endpoint():
     def __init__(self, type, func, gpu):
@@ -78,26 +75,33 @@ class Potassium():
 
             # run in gpu lock by default
             if endpoint.gpu:
+            
                 # gpu rejects if lock already in use
                 if self.is_working():
                     res = make_response()
                     res.status_code = 423
                     res.headers['X-Endpoint-Type'] = endpoint.type
                     return res
+                    
                 with self._lock:
                     try:
                         response = endpoint.func(req).json
-                        self.event_chan.put(item=True, block=False)
                     except:
-                        
                         tb_str = traceback.format_exc()
                         response = tb_str
                         failed = True
-
-                        self.event_chan.put(item = True, block=False)
+                try:
+                    self.event_chan.put(item = True, block=False)
+                except Full:
+                    pass
 
             else:
-                response = endpoint.func(req).json
+                try:
+                    response = endpoint.func(req).json
+                except:
+                    tb_str = traceback.format_exc()
+                    response = tb_str
+                    failed = True
 
             res = make_response(response)
             res.headers['X-Endpoint-Type'] = endpoint.type
@@ -124,12 +128,16 @@ class Potassium():
                     with lock:
                         try:
                             endpoint.func(req)
-                            self.event_chan.put(item = True, block=False)
                         except:
-                            self.event_chan.put(item=True, block=False)
+                            pass
+                    try:
+                        self.event_chan.put(item = True, block=False)
+                    except Full:
+                        pass
                 else:
                     endpoint.func(req)
-                # we currently do nothing with the response
+                    # we currently do nothing with the response
+                
             thread = Thread(target=task, args=(endpoint, self._lock, req))
             thread.start()
 
