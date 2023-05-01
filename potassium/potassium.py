@@ -115,6 +115,7 @@ class Potassium():
             )
 
             if endpoint.gpu:
+                
                 # gpu rejects if lock already in use
                 if self.is_working():
                     res = make_response()
@@ -128,15 +129,21 @@ class Potassium():
                     with lock:
                         try:
                             endpoint.func(req)
-                        except:
-                            pass
-                    try:
-                        self.event_chan.put(item = True, block=False)
-                    except Full:
-                        pass
+                        except Exception as e:
+                            # do any cleanup before re-raising user error
+                            try:
+                                self.event_chan.put(item = True, block=False)
+                            except Full:
+                                pass
+                            raise e
+                    
                 else:
-                    endpoint.func(req)
-                    # we currently do nothing with the response
+                    try:
+                        endpoint.func(req)
+                    except Exception as e:
+                        # do any cleanup before re-raising user error
+                        # in this case, there is no cleanup
+                        raise e
                 
             thread = Thread(target=task, args=(endpoint, self._lock, req))
             thread.start()
