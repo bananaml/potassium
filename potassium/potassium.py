@@ -3,8 +3,10 @@ from flask import Flask, request, make_response, abort
 from werkzeug.serving import make_server
 from threading import Thread, Lock
 import functools
-from termcolor import colored
 from queue import Queue, Full
+import traceback
+from termcolor import colored
+
 
 class Endpoint():
     def __init__(self, type, func, gpu):
@@ -73,26 +75,41 @@ class Potassium():
                 json = flask_request.get_json()
             )
 
+            failed = False
             # run in gpu lock by default
             if endpoint.gpu:
+            
                 # gpu rejects if lock already in use
                 if self.is_working():
                     res = make_response()
                     res.status_code = 423
                     res.headers['X-Endpoint-Type'] = endpoint.type
                     return res
+                    
                 with self._lock:
-                    response = endpoint.func(req).json
+                    try:
+                        response = endpoint.func(req).json
+                    except:
+                        tb_str = traceback.format_exc()
+                        response = tb_str
+                        failed = True
                 try:
                     self.event_chan.put(item = True, block=False)
                 except Full:
                     pass
 
             else:
-                response = endpoint.func(req).json
+                try:
+                    response = endpoint.func(req).json
+                except:
+                    tb_str = traceback.format_exc()
+                    response = tb_str
+                    failed = True
 
             res = make_response(response)
             res.headers['X-Endpoint-Type'] = endpoint.type
+            if failed:
+                res.status_code = 500
             return res
         
         if endpoint.type == "background":
@@ -101,6 +118,7 @@ class Potassium():
             )
 
             if endpoint.gpu:
+                
                 # gpu rejects if lock already in use
                 if self.is_working():
                     res = make_response()
@@ -112,19 +130,29 @@ class Potassium():
             def task(endpoint, lock, req):
                 if endpoint.gpu:
                     with lock:
-                        endpoint.func(req)
-                    try:
-                        self.event_chan.put(item = True, block=False)
-                    except Full:
-                        pass
+                        try:
+                            endpoint.func(req)
+                        except Exception as e:
+                            # do any cleanup before re-raising user error
+                            try:
+                                self.event_chan.put(item = True, block=False)
+                            except Full:
+                                pass
+                            raise e
+                    
                 else:
-                    endpoint.func(req)
-                # we currently do nothing with the response
+                    try:
+                        endpoint.func(req)
+                    except Exception as e:
+                        # do any cleanup before re-raising user error
+                        # in this case, there is no cleanup
+                        raise e
+                
             thread = Thread(target=task, args=(endpoint, self._lock, req))
             thread.start()
 
             # send task start success message
-            res = make_response({"started": True})
+            res = make_response({'started': True})            
             res.headers['X-Endpoint-Type'] = endpoint.type
             return res
     
