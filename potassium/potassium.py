@@ -102,7 +102,6 @@ class Potassium():
                         tb_str = traceback.format_exc()
                         response = tb_str
                         failed = True
-                    self._write_event_chan(True)
 
             else:
                 try:
