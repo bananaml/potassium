@@ -22,7 +22,7 @@ class Request():
 
 
 class Response():
-    def __init__(self, status: int, json: dict):
+    def __init__(self, status:int = 200, json: dict = {}):
         self.json = json
         self.status = status
 
@@ -84,10 +84,8 @@ class Potassium():
                 json=flask_request.get_json()
             )
 
-            failed = False
             # run in gpu lock by default
             if endpoint.gpu:
-
                 # gpu rejects if lock already in use
                 if self._is_working():
                     res = make_response()
@@ -97,25 +95,31 @@ class Potassium():
 
                 with self._lock:
                     try:
-                        response = endpoint.func(req).json
+                        out = endpoint.func(req)
+                        res = make_response(out.json)
+                        res.status_code = out.status
+                        res.headers['X-Endpoint-Type'] = endpoint.type
+                        return res
                     except:
                         tb_str = traceback.format_exc()
-                        response = tb_str
-                        failed = True
+                        res = make_response(tb_str)
+                        res.status_code = 500
+                        res.headers['X-Endpoint-Type'] = endpoint.type
+                        return res
 
             else:
                 try:
-                    response = endpoint.func(req).json
+                    out = endpoint.func(req)
+                    res = make_response(out.json)
+                    res.status_code = out.status
+                    res.headers['X-Endpoint-Type'] = endpoint.type
+                    return res
                 except:
                     tb_str = traceback.format_exc()
-                    response = tb_str
-                    failed = True
-
-            res = make_response(response)
-            res.headers['X-Endpoint-Type'] = endpoint.type
-            if failed:
-                res.status_code = 500
-            return res
+                    res = make_response(tb_str)
+                    res.status_code = 500
+                    res.headers['X-Endpoint-Type'] = endpoint.type
+                    return res
 
         if endpoint.type == "background":
             req = Request(
