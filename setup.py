@@ -8,7 +8,7 @@ long_description = (this_directory / "README.md").read_text()
 setup(
     name='potassium',
     packages=['potassium'],
-    version='0.0.8',
+    version='0.0.9',
     license='Apache License 2.0',
     # Give a short description about your library
     description='The potassium package is a flask-like HTTP server for serving large AI models',
@@ -22,7 +22,8 @@ setup(
     install_requires=[
         "Flask",
         "requests",
-        "termcolor"
+        "termcolor",
+        "redis"
     ],
     classifiers=[
         # Chose either "3 - Alpha", "4 - Beta" or "5 - Production/Stable" as the current state of your package
