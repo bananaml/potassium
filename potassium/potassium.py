@@ -1,4 +1,4 @@
-import requests
+import os
 from flask import Flask, request, make_response, abort
 from werkzeug.serving import make_server
 from threading import Thread, Lock
@@ -192,8 +192,11 @@ class Potassium():
     # serve runs the http server
     def serve(self, host="0.0.0.0", port=8000):
         print(colored("------\nStarting Potassium Server 🍌", 'yellow'))
-        print(colored("Running init()", 'yellow'))
-        self._init_func()
+        
+        if os.getenv("DISABLE_INIT") != "True":
+            print(colored("Running init()", 'yellow'))
+            self._init_func()
+            
         flask_app = self._create_flask_app()
         server = make_server(host, port, flask_app)
         print(colored(f"Serving at http://{host}:{port}\n------", 'green'))
