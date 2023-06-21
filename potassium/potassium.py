@@ -55,8 +55,20 @@ class Potassium():
             def wrapper(request):
                 # send in app's stateful context if GPU, and the request
                 if gpu:
-                    return func(self._context, request)
-                return func(None, request)
+                    out = func(self._context, request)
+                else:
+                    out = func(None, request)
+
+                if type(out) != Response:
+                    raise Exception("Potassium Response object not returned")
+
+                # check if out.json is a dict
+                if type(out.json) != dict:
+                    raise Exception("Potassium Response object json must be a dict")
+
+                return out
+
+ 
             self._endpoints[route] = Endpoint(
                 type="handler", func=wrapper, gpu=gpu)
             return wrapper
@@ -70,7 +82,9 @@ class Potassium():
                 # send in app's stateful context if GPU, and the request
                 if gpu:
                     return func(self._context, request)
-                return func(None, request)
+                else:
+                    return func(None, request)
+
             self._endpoints[route] = Endpoint(
                 type="background", func=wrapper, gpu=gpu)
             return wrapper
