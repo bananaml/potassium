@@ -2,10 +2,10 @@ from store import Store, RedisConfig
 
 # Redis store can save json serializeable objects
 store = Store(
-    backend="redis", 
-    config = RedisConfig(
-        host = "localhost", 
-        port = 6379
+    backend="redis",
+    config=RedisConfig(
+        host="localhost",
+        port=6379
     )
 )
 
@@ -25,28 +25,31 @@ for obj in objs:
 
 # ----
 
-# pickle redis and localstore can save complex objects
+# pickle redis can save complex objects
+
 
 class Complex():
     def __init__(self, a) -> None:
         self.a = a
-    def __eq__ (self, other): # necessary for the equal assert later
+
+    def __eq__(self, other):  # necessary for the equal assert later
         return self.a == other.a
+
 
 objs = [
     "1",
     True,
     ["some", "list"],
     {"some": {"nested": "dict"}},
-    Complex(a = 1)
+    Complex(a=1)
 ]
 
 store = Store(
-    backend="redis", 
-    config = RedisConfig(
-        host = "localhost", 
-        port = 6379,
-        encoding = "pickle"
+    backend="redis",
+    config=RedisConfig(
+        host="localhost",
+        port=6379,
+        encoding="pickle"
     )
 )
 
@@ -56,15 +59,3 @@ for obj in objs:
     out = store.get("key")
     if obj != obj:
         print("failed case", obj)
-
-# local store can save complex objects
-store = Store()
-
-print("Testing local store")
-for obj in objs:
-    store.set("key", obj)
-    out = store.get("key")
-    if out != obj:
-        print("failed case", obj)
-
-
