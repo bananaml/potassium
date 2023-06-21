@@ -37,12 +37,13 @@ This downloads boilerplate for your potassium app, and automatically installs po
 banana init my-app
 cd my-app
 ```
-3. Start the hot-reload dev server
+1. Start the dev server
 ```bash
-banana dev
+. ./venv/bin/activate
+python3 app.py
 ```
 
-4. Call your API (from a separate terminal)
+1. Call your API (from a separate terminal)
 ```bash
 curl -X POST -H "Content-Type: application/json" -d '{"prompt": "Hello I am a [MASK] model."}' http://localhost:8000/
 ``` 
@@ -161,7 +162,7 @@ There may only be one `@app.init` function.
 ## @app.handler()
 
 ```python
-@app.handler("/", gpu=True)
+@app.handler("/")
 def handler(context: dict, request: Request) -> Response:
     
     prompt = request.json.get("prompt")
@@ -178,11 +179,9 @@ The `@app.handler` decorated function runs for every http call, and is used to r
 
 You may configure as many `@app.handler` functions as you'd like, with unique API routes.
 
-The `gpu=True` argument allows the handler to access the prewarmed context value, and runs the handler as blocking. While the handler is running, potassium will reject any other `gpu=True` handlers with a 423 Locked error, to ensure that there are no multithreading issues with CUDA. If set to `false`, the handler may be called at any time, but the context provided will be `None`. `gpu` defaults to `True`.
-
 ---
 
-## @app.background(path="/background", gpu=True)
+## @app.background(path="/background")
 
 ```python
 @app.background("/background")
@@ -199,11 +198,9 @@ def handler(context: dict, request: Request) -> Response:
 
 The `@app.background()` decorated function runs a nonblocking job in the background, for tasks where results aren't expected to return clientside. It's on you to forward the data to wherever you please. Potassium supplies a `send_webhook()` helper function for POSTing data onward to a url, or you may add your own custom upload/pipeline code.
 
-When invoked, the client immediately returns a `{"success": true}` message.
+When invoked, the server immediately returns a `{"success": true}` message.
 
 You may configure as many `@app.background` functions as you'd like, with unique API routes.
-
-The `gpu=True` argument allows the background handler to access the prewarmed context value, and runs the child background thread as blocking. While the child thread is running, potassium will reject any other `gpu=True` handlers with a 423 Locked error, to ensure that there are no multithreading issues with CUDA. If set to `false`, the handler may be called at any time, but the context provided will be `None`. `gpu` defaults to `True`.
 
 ---
 
@@ -215,7 +212,7 @@ The `gpu=True` argument allows the background handler to access the prewarmed co
 ---
 
 # Store
-Potassium includes a key-value storage primative, to help users persist data between calls. This is often used to implement patterns such as an async-worker queue where one background task runs inference and saves the result to the Store, with another handler set to `gpu=False` built to fetch the result.
+Potassium includes a key-value storage primative, to help users persist data between calls.
 
 Example usage: your own Redis backend (encouraged)
 ```
