@@ -9,20 +9,18 @@ from termcolor import colored
 
 
 class Endpoint():
-    def __init__(self, type, func, gpu):
+    def __init__(self, type, func):
         self.type = type
         self.func = func
-        self.gpu = gpu
 
 
 class Request():
-    def __init__(self, json: dict, ws=None):
+    def __init__(self, json: dict):
         self.json = json
-        self.ws = ws
 
 
 class Response():
-    def __init__(self, status:int = 200, json: dict = {}):
+    def __init__(self, status: int = 200, json: dict = {}):
         self.json = json
         self.status = status
 
@@ -33,7 +31,7 @@ class Potassium():
 
         def default_func():
             return
-        
+
         # semi-private vars, not intended for users to modify
         self._init_func = default_func
         self._endpoints = {}  # dictionary to store unlimited Endpoints, by unique route
@@ -49,79 +47,56 @@ class Potassium():
         return wrapper
 
     # handler is a blocking http POST handler
-    def handler(self, route: str = "/", gpu: bool = True):
+    def handler(self, route: str = "/"):
         def actual_decorator(func):
             @functools.wraps(func)
             def wrapper(request):
                 # send in app's stateful context if GPU, and the request
-                if gpu:
-                    out = func(self._context, request)
-                else:
-                    out = func(None, request)
+                out = func(self._context, request)
 
                 if type(out) != Response:
                     raise Exception("Potassium Response object not returned")
 
                 # check if out.json is a dict
                 if type(out.json) != dict:
-                    raise Exception("Potassium Response object json must be a dict")
+                    raise Exception(
+                        "Potassium Response object json must be a dict")
 
                 return out
 
- 
-            self._endpoints[route] = Endpoint(
-                type="handler", func=wrapper, gpu=gpu)
+            self._endpoints[route] = Endpoint(type="handler", func=wrapper)
             return wrapper
         return actual_decorator
 
     # background is a non-blocking http POST handler
-    def background(self, route: str = "/", gpu: bool = True):
+    def background(self, route: str = "/"):
         def actual_decorator(func):
             @functools.wraps(func)
             def wrapper(request):
                 # send in app's stateful context if GPU, and the request
-                if gpu:
-                    return func(self._context, request)
-                else:
-                    return func(None, request)
+                return func(self._context, request)
 
             self._endpoints[route] = Endpoint(
-                type="background", func=wrapper, gpu=gpu)
+                type="background", func=wrapper)
             return wrapper
         return actual_decorator
 
     # _handle_generic takes in a request and the endpoint it was routed to and handles it as expected by that endpoint
     def _handle_generic(self, route, endpoint, flask_request):
 
+        # potassium rejects if lock already in use
+        if self._is_working():
+            res = make_response()
+            res.status_code = 423
+            res.headers['X-Endpoint-Type'] = endpoint.type
+            return res
+
         if endpoint.type == "handler":
             req = Request(
                 json=flask_request.get_json()
             )
 
-            # run in gpu lock by default
-            if endpoint.gpu:
-                # gpu rejects if lock already in use
-                if self._is_working():
-                    res = make_response()
-                    res.status_code = 423
-                    res.headers['X-Endpoint-Type'] = endpoint.type
-                    return res
-
-                with self._lock:
-                    try:
-                        out = endpoint.func(req)
-                        res = make_response(out.json)
-                        res.status_code = out.status
-                        res.headers['X-Endpoint-Type'] = endpoint.type
-                        return res
-                    except:
-                        tb_str = traceback.format_exc()
-                        res = make_response(tb_str)
-                        res.status_code = 500
-                        res.headers['X-Endpoint-Type'] = endpoint.type
-                        return res
-
-            else:
+            with self._lock:
                 try:
                     out = endpoint.func(req)
                     res = make_response(out.json)
@@ -140,32 +115,16 @@ class Potassium():
                 json=flask_request.get_json()
             )
 
-            if endpoint.gpu:
-                # gpu rejects if lock already in use
-                if self._is_working():
-                    res = make_response()
-                    res.status_code = 423
-                    res.headers['X-Endpoint-Type'] = endpoint.type
-                    return res
-
             # run as threaded task
             def task(endpoint, lock, req):
-                if endpoint.gpu:
-                    with lock:
-                        try:
-                            endpoint.func(req)
-                        except Exception as e:
-                            # do any cleanup before re-raising user error
-                            self._write_event_chan(True)
-                            raise e
-                    self._write_event_chan(True)
-                else:
+                with lock:
                     try:
                         endpoint.func(req)
                     except Exception as e:
                         # do any cleanup before re-raising user error
-                        # in this case, there is no cleanup
+                        self._write_event_chan(True)
                         raise e
+                self._write_event_chan(True)
 
             thread = Thread(target=task, args=(endpoint, self._lock, req))
             thread.start()
