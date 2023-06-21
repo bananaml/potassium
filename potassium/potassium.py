@@ -96,13 +96,21 @@ class Potassium():
                 with self._lock:
                     try:
                         out = endpoint.func(req)
+                        if type(out) != Response:
+                            raise Exception("Potassium Response object not returned")
+
+                        # check if out.json is a dict
+                        if type(out.json) != dict:
+                            raise Exception("Potassium Response object json must be a dict")
+    
                         res = make_response(out.json)
                         res.status_code = out.status
                         res.headers['X-Endpoint-Type'] = endpoint.type
                         return res
                     except:
-                        error_message = f"Unable to create valid Potassium Response, please ensure your Response objects contain valid json, status code)"
-                        res = make_response(error_message)
+                        tb_str = traceback.format_exc()
+                        print(tb_str)
+                        res = make_response(tb_str)
                         res.status_code = 500
                         res.headers['X-Endpoint-Type'] = endpoint.type
                         return res
@@ -110,6 +118,15 @@ class Potassium():
             else:
                 try:
                     out = endpoint.func(req)
+
+                    if type(out) != Response:
+                        raise Exception("Potassium Response object not returned")
+
+                        # check if out.json is a dict
+                    if type(out.json) != dict:
+                        raise Exception("Potassium Response object json must be a dict")
+
+
                     res = make_response(out.json)
                     res.status_code = out.status
                     res.headers['X-Endpoint-Type'] = endpoint.type
