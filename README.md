@@ -37,13 +37,13 @@ This downloads boilerplate for your potassium app, and automatically installs po
 banana init my-app
 cd my-app
 ```
-1. Start the dev server
+3. Start the dev server
 ```bash
 . ./venv/bin/activate
 python3 app.py
 ```
 
-1. Call your API (from a separate terminal)
+4. Call your API (from a separate terminal)
 ```bash
 curl -X POST -H "Content-Type: application/json" -d '{"prompt": "Hello I am a [MASK] model."}' http://localhost:8000/
 ``` 
