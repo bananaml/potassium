@@ -101,8 +101,8 @@ class Potassium():
                         res.headers['X-Endpoint-Type'] = endpoint.type
                         return res
                     except:
-                        tb_str = traceback.format_exc()
-                        res = make_response(tb_str)
+                        error_message = f"Unable to create valid Potassium Response, please ensure your Response objects contain valid json, status code)"
+                        res = make_response(error_message)
                         res.status_code = 500
                         res.headers['X-Endpoint-Type'] = endpoint.type
                         return res
