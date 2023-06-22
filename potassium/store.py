@@ -34,7 +34,7 @@ class RedisConfig():
 
 
 class S3Config():
-    def __init__(self, access_key, secret_access_key, bucket, encoding: str = "json"):
+    def __init__(self, aws_access_key_id, aws_secret_access_key, bucket, encoding: str = "json"):
         "encoding can be 'json' or 'pickle'. JSON is default.\nPickle has better support for arbitrary python types, but using pickle across the network to s3 introduces a large security risk, see https://stackoverflow.com/questions/2259270/pickle-or-json/2259351#2259351"
         # validate args
         encodings = ["json", "pickle"]
@@ -42,8 +42,15 @@ class S3Config():
             raise ValueError(
                 "s3 config encoding must be one of the following:", encodings)
 
-        self.access_key = access_key
-        self.secret_access_key = secret_access_key
+        if aws_access_key_id is None:
+            raise ValueError(
+                "aws_access_key_id must be provided. It is a sensitive key, so ensure it is scoped to the bucket you want to use and not hardcoded in any open source repos.")
+        if aws_secret_access_key is None:
+            raise ValueError(
+                "aws_secret_access_key must be provided. It is a sensitive key, so ensure it is scoped to the bucket you want to use and not hardcoded in any open source repos.")
+
+        self.access_key = aws_access_key_id
+        self.secret_access_key = aws_secret_access_key
         self.bucket = bucket
         self.encoding = encoding
 
