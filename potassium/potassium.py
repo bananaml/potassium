@@ -26,6 +26,8 @@ class Response():
 
 
 class Potassium():
+    "Potassium is a simple, stateful, GPU-enabled, and autoscaleable web framework for deploying machine learning models."
+
     def __init__(self, name):
         self.name = name
 
@@ -39,8 +41,17 @@ class Potassium():
         self._lock = Lock()
         self._event_chan = Queue(maxsize=1)
 
-    # init runs once on server start
+    #
     def init(self, func):
+        """init runs once on server start, and is used to initialize the app's context.
+        You can use this to load models onto the GPU, set up connections, etc.
+        The context is then passed into all handlers and background tasks.
+        Notes:
+        - this function must return a dictionary
+        - the context is not persisted to disk, and will be reloaded on server restart
+        - the context is not shared between multiple replicas of the app
+        """
+
         def wrapper():
             self._context = func()
         self._init_func = wrapper
@@ -48,6 +59,7 @@ class Potassium():
 
     # handler is a blocking http POST handler
     def handler(self, route: str = "/"):
+        "handler is a blocking http POST handler"
         def actual_decorator(func):
             @functools.wraps(func)
             def wrapper(request):
@@ -70,6 +82,7 @@ class Potassium():
 
     # background is a non-blocking http POST handler
     def background(self, route: str = "/"):
+        "background is a non-blocking http POST handler"
         def actual_decorator(func):
             @functools.wraps(func)
             def wrapper(request):
@@ -80,6 +93,21 @@ class Potassium():
                 type="background", func=wrapper)
             return wrapper
         return actual_decorator
+
+    def set_context(self, context):
+        """set_context overwrites the app's context variable.
+        This is useful for persisting objects in-memory while the app is running.
+        Notes:
+        - these objects are not persisted to disk, and will be lost on server restart
+        - modifying context in one replica of the app will not modify it in other replicas
+        """
+        # ensure context is a dict
+        if type(context) != dict:
+            raise Exception("context must be a dict")
+        if context == {}:
+            # TODO: warn user that context is empty, if debug is on
+            pass
+        self._context = context
 
     # _handle_generic takes in a request and the endpoint it was routed to and handles it as expected by that endpoint
     def _handle_generic(self, route, endpoint, flask_request):

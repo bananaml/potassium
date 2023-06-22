@@ -1,11 +1,8 @@
-from potassium import Potassium, Request, Response, send_webhook
+from potassium import Potassium, Request, Response
 from transformers import pipeline
 import torch
-import time
 
 app = Potassium("my_app")
-
-# @app.init runs at startup, and initializes the app's context
 
 
 @app.init
