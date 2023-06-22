@@ -1,4 +1,4 @@
-from potassium import Potassium, Request, Response, send_webhook
+from potassium import Potassium, Request, Response, set_context
 from transformers import pipeline
 import torch
 import time
@@ -27,6 +27,8 @@ def handler(context: dict, request: Request) -> Response:
     prompt = request.json.get("prompt")
     model = context.get("model")
     outputs = model(prompt)
+
+    app.set_context()
 
     return Response(
         json={"outputs": outputs},
