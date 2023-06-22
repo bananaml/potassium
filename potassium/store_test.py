@@ -66,8 +66,8 @@ for obj in objs:
 
 
 # s3
-access_key = os.environ["AWS_ACCESS_KEY_ID"]
-secret_access_key = os.environ["AWS_SECRET_ACCESS_KEY"]
+aws_access_key_id = os.environ["AWS_ACCESS_KEY_ID"]
+aws_secret_access_key = os.environ["AWS_SECRET_ACCESS_KEY"]
 bucket = "potassium-test"
 
 
@@ -75,8 +75,8 @@ bucket = "potassium-test"
 store = Store(
     backend="s3",
     config=S3Config(
-        access_key=access_key,
-        secret_access_key=secret_access_key,
+        aws_access_key_id=aws_access_key_id,
+        aws_secret_access_key=aws_secret_access_key,
         bucket=bucket,
     )
 )
@@ -119,8 +119,8 @@ objs = [
 store = Store(
     backend="s3",
     config=S3Config(
-        access_key=access_key,
-        secret_access_key=secret_access_key,
+        aws_access_key_id=aws_access_key_id,
+        aws_secret_access_key=aws_secret_access_key,
         bucket=bucket,
         encoding="pickle"
     )
