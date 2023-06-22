@@ -2,3 +2,4 @@ Flask
 requests
 termcolor
 redis
+boto3
