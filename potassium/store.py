@@ -35,7 +35,7 @@ class RedisConfig():
 
 class S3Config():
     def __init__(self, access_key, secret_access_key, bucket, encoding: str = "json"):
-        "encoding can be 'json' or 'pickle'. JSON is default.\nPickle has better support for arbitrary python types, but using pickle with a remote redis introduces a large security risk, see https://stackoverflow.com/questions/2259270/pickle-or-json/2259351#2259351"
+        "encoding can be 'json' or 'pickle'. JSON is default.\nPickle has better support for arbitrary python types, but using pickle across the network to s3 introduces a large security risk, see https://stackoverflow.com/questions/2259270/pickle-or-json/2259351#2259351"
         # validate args
         encodings = ["json", "pickle"]
         if encoding not in encodings:
