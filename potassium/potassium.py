@@ -94,21 +94,6 @@ class Potassium():
             return wrapper
         return actual_decorator
 
-    def set_context(self, context):
-        """set_context overwrites the app's context variable.
-        This is useful for persisting objects in-memory while the app is running.
-        Notes:
-        - these objects are not persisted to disk, and will be lost on server restart
-        - modifying context in one replica of the app will not modify it in other replicas
-        """
-        # ensure context is a dict
-        if type(context) != dict:
-            raise Exception("context must be a dict")
-        if context == {}:
-            # TODO: warn user that context is empty, if debug is on
-            pass
-        self._context = context
-
     # _handle_generic takes in a request and the endpoint it was routed to and handles it as expected by that endpoint
     def _handle_generic(self, route, endpoint, flask_request):
 
