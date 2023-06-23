@@ -179,6 +179,8 @@ The `@app.handler` decorated function runs for every http call, and is used to r
 
 You may configure as many `@app.handler` functions as you'd like, with unique API routes.
 
+The context dict passed in is mutable, so you can modify it in-place to persist objects between warm handlers.
+
 ---
 
 ## @app.background(path="/background")
@@ -202,8 +204,11 @@ When invoked, the server immediately returns a `{"success": true}` message.
 
 You may configure as many `@app.background` functions as you'd like, with unique API routes.
 
----
 
+The context dict passed in is mutable, so you can modify it in-place to persist objects between warm handlers.
+
+---
+gi
 ## app.serve()
 
 `app.serve` runs the server, and is a blocking operation.
