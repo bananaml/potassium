@@ -20,7 +20,6 @@ def init():
 
 @app.handler()
 def handler(context: dict, request: Request) -> Response:
-
     prompt = request.json.get("prompt")
     model = context.get("model")
     outputs = model(prompt)
