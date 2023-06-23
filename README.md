@@ -208,7 +208,6 @@ You may configure as many `@app.background` functions as you'd like, with unique
 The context dict passed in is a mutable reference, so you can modify it in-place to persist objects between warm handlers.
 
 ---
-gi
 ## app.serve()
 
 `app.serve` runs the server, and is a blocking operation.
