@@ -118,6 +118,7 @@ class Potassium():
                     return res
                 except:
                     tb_str = traceback.format_exc()
+                    print(colored(tb_str, "red"))
                     res = make_response(tb_str)
                     res.status_code = 500
                     res.headers['X-Endpoint-Type'] = endpoint.type
