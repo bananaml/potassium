@@ -1,5 +1,7 @@
 import requests
 from flask import Flask, request, make_response, abort
+from fastapi import FastAPI, Request, HTTPException
+from fastapi.responses import JSONResponse
 from werkzeug.serving import make_server
 from threading import Thread, Lock
 import functools
@@ -28,8 +30,9 @@ class Response():
 class Potassium():
     "Potassium is a simple, stateful, GPU-enabled, and autoscaleable web framework for deploying machine learning models."
 
-    def __init__(self, name):
+    def __init__(self, name, backend="flask"):
         self.name = name
+        self.backend = backend
 
         def default_func():
             return
@@ -99,7 +102,10 @@ class Potassium():
 
         # potassium rejects if lock already in use
         if self._is_working():
-            res = make_response()
+            if self.backend == "FastAPI":
+                res = JSONResponse()
+            else:
+                res = make_response()
             res.status_code = 423
             res.headers['X-Endpoint-Type'] = endpoint.type
             return res
@@ -112,14 +118,20 @@ class Potassium():
             with self._lock:
                 try:
                     out = endpoint.func(req)
-                    res = make_response(out.json)
+                     if self.backend == "FastAPI":
+                        res = JSONResponse(out.json)
+                    else:
+                        res = make_response(out.json)
                     res.status_code = out.status
                     res.headers['X-Endpoint-Type'] = endpoint.type
                     return res
                 except:
                     tb_str = traceback.format_exc()
                     print(colored(tb_str, "red"))
-                    res = make_response(tb_str)
+                     if self.backend == "FastAPI":
+                        res = JSONResponse(tb_str)
+                    else:
+                        res = make_response(tb_str)
                     res.status_code = 500
                     res.headers['X-Endpoint-Type'] = endpoint.type
                     return res
@@ -159,6 +171,24 @@ class Potassium():
 
     def _is_working(self):
         return self._lock.locked()
+    
+    def _create_fastapi_app(self):
+        fastapi_app = FastAPI()
+
+        async def handle(request: Request, path: str = ""):
+            route = "/" + path
+            if route not in self._endpoints:
+                raise HTTPException(status_code=404)
+    
+            endpoint = self._endpoints[route]
+            return await self._handle_generic(route, endpoint, request)
+    
+        fastapi_app.router.route_class = APIRoute
+        
+        fastapi_app.add_route("/", handle, methods=["POST"])
+        fastapi_app.add_route("/{path:path}", handle, methods=["POST"])
+
+    return fastapi_app
 
     def _create_flask_app(self):
         flask_app = Flask(__name__)
@@ -181,7 +211,10 @@ class Potassium():
         print(colored("------\nStarting Potassium Server 🍌", 'yellow'))
         print(colored("Running init()", 'yellow'))
         self._init_func()
-        flask_app = self._create_flask_app()
-        server = make_server(host, port, flask_app)
+        if self.backend == "FastAPI":
+            app = self._create_fastapi_app()
+        else:
+            app = self._create_flask_app()
+        server = make_server(host, port, app)
         print(colored(f"Serving at http://{host}:{port}\n------", 'green'))
         server.serve_forever()
