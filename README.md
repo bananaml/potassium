@@ -131,6 +131,13 @@ app = Potassium("server")
 ```
 
 This instantiates your HTTP app, similar to popular frameworks like [Flask](https://flask.palletsprojects.com/en/2.2.x/_)
+You can select backend options as 'Flask' or 'FastAPI'. The rest of the operations are the same for both backends.
+
+```python
+from potassium import Potassium
+
+app = Potassium("server", backend="FastAPI")
+```
 
 ---
 
