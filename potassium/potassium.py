@@ -31,7 +31,7 @@ class Response:
 class Potassium:
     "Potassium is a simple, stateful, GPU-enabled, and autoscaleable web framework for deploying machine learning models."
 
-    def __init__(self, name, backend="flask"):
+    def __init__(self, name, backend="Flask"):
         self.name = name
         self.backend = backend
 
