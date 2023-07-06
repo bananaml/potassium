@@ -1,6 +1,9 @@
-import requests
 from flask import Flask, request, make_response, abort
+from fastapi import FastAPI, Request as FastAPIRequest, HTTPException
+from fastapi.responses import JSONResponse
+from fastapi.routing import APIRoute
 from werkzeug.serving import make_server
+from uvicorn import run as uvicorn_run
 from threading import Thread, Lock
 import functools
 from queue import Queue, Full
@@ -8,28 +11,29 @@ import traceback
 from termcolor import colored
 
 
-class Endpoint():
+class Endpoint:
     def __init__(self, type, func):
         self.type = type
         self.func = func
 
 
-class Request():
+class Request:
     def __init__(self, json: dict):
         self.json = json
 
 
-class Response():
+class Response:
     def __init__(self, status: int = 200, json: dict = {}):
         self.json = json
         self.status = status
 
 
-class Potassium():
+class Potassium:
     "Potassium is a simple, stateful, GPU-enabled, and autoscaleable web framework for deploying machine learning models."
 
-    def __init__(self, name):
+    def __init__(self, name, backend="Flask"):
         self.name = name
+        self.backend = backend
 
         def default_func():
             return
@@ -54,12 +58,14 @@ class Potassium():
 
         def wrapper():
             self._context = func()
+
         self._init_func = wrapper
         return wrapper
 
     # handler is a blocking http POST handler
     def handler(self, route: str = "/"):
         "handler is a blocking http POST handler"
+
         def actual_decorator(func):
             @functools.wraps(func)
             def wrapper(request):
@@ -71,27 +77,28 @@ class Potassium():
 
                 # check if out.json is a dict
                 if type(out.json) != dict:
-                    raise Exception(
-                        "Potassium Response object json must be a dict")
+                    raise Exception("Potassium Response object json must be a dict")
 
                 return out
 
             self._endpoints[route] = Endpoint(type="handler", func=wrapper)
             return wrapper
+
         return actual_decorator
 
     # background is a non-blocking http POST handler
     def background(self, route: str = "/"):
         "background is a non-blocking http POST handler"
+
         def actual_decorator(func):
             @functools.wraps(func)
             def wrapper(request):
                 # send in app's stateful context if GPU, and the request
                 return func(self._context, request)
 
-            self._endpoints[route] = Endpoint(
-                type="background", func=wrapper)
+            self._endpoints[route] = Endpoint(type="background", func=wrapper)
             return wrapper
+
         return actual_decorator
 
     # _handle_generic takes in a request and the endpoint it was routed to and handles it as expected by that endpoint
@@ -99,35 +106,32 @@ class Potassium():
 
         # potassium rejects if lock already in use
         if self._is_working():
-            res = make_response()
+            res = JSONResponse() if self.backend!= "FastAPI" else make_response()
             res.status_code = 423
-            res.headers['X-Endpoint-Type'] = endpoint.type
+            res.headers["X-Endpoint-Type"] = endpoint.type
             return res
 
         if endpoint.type == "handler":
-            req = Request(
-                json=flask_request.get_json()
-            )
-
+            req_json = flask_request.get_json() if self.backend != "FastAPI" else flask_request
+            req = Request(json=req_json)
             with self._lock:
                 try:
                     out = endpoint.func(req)
-                    res = make_response(out.json)
+                    res = JSONResponse(out.json) if self.backend == "FastAPI" else make_response(out.json)
                     res.status_code = out.status
-                    res.headers['X-Endpoint-Type'] = endpoint.type
+                    res.headers["X-Endpoint-Type"] = endpoint.type
                     return res
                 except:
                     tb_str = traceback.format_exc()
                     print(colored(tb_str, "red"))
-                    res = make_response(tb_str)
+                    res = JSONResponse(tb_str) if self.backend!= "FastAPI" else make_response(tb_str)
                     res.status_code = 500
-                    res.headers['X-Endpoint-Type'] = endpoint.type
+                    res.headers["X-Endpoint-Type"] = endpoint.type
                     return res
 
         if endpoint.type == "background":
-            req = Request(
-                json=flask_request.get_json()
-            )
+            req_json = flask_request.get_json() if self.backend != "FastAPI" else flask_request
+            req = Request(json=req_json)
 
             # run as threaded task
             def task(endpoint, lock, req):
@@ -144,8 +148,8 @@ class Potassium():
             thread.start()
 
             # send task start success message
-            res = make_response({'started': True})
-            res.headers['X-Endpoint-Type'] = endpoint.type
+            res = make_response({"started": True})
+            res.headers["X-Endpoint-Type"] = endpoint.type
             return res
 
     def _write_event_chan(self, item):
@@ -160,12 +164,31 @@ class Potassium():
     def _is_working(self):
         return self._lock.locked()
 
+    def _create_fastapi_app(self):
+        fastapi_app = FastAPI()
+
+        async def handle(request: FastAPIRequest, path: str = ""):
+            request_json = await request.body()
+            route = "/" + path
+            if route not in self._endpoints:
+                raise HTTPException(status_code=404)
+
+            endpoint = self._endpoints[route]
+            return self._handle_generic(route, endpoint, request_json)
+
+        fastapi_app.router.route_class = APIRoute
+
+        fastapi_app.add_route("/", handle, methods=["POST"])
+        fastapi_app.add_route("/{path:path}", handle, methods=["POST"])
+
+        return fastapi_app
+
     def _create_flask_app(self):
         flask_app = Flask(__name__)
 
         # ingest into single endpoint and spread out to multiple downstream funcs
-        @flask_app.route('/', defaults={'path': ''}, methods=["POST"])
-        @flask_app.route('/<path:path>', methods=["POST"])
+        @flask_app.route("/", defaults={"path": ""}, methods=["POST"])
+        @flask_app.route("/<path:path>", methods=["POST"])
         def handle(path):
             route = "/" + path
             if route not in self._endpoints:
@@ -178,10 +201,15 @@ class Potassium():
 
     # serve runs the http server
     def serve(self, host="0.0.0.0", port=8000):
-        print(colored("------\nStarting Potassium Server 🍌", 'yellow'))
-        print(colored("Running init()", 'yellow'))
+        print(colored("------\nStarting Potassium Server 🍌", "yellow"))
+        print(colored("Running init()", "yellow"))
         self._init_func()
-        flask_app = self._create_flask_app()
-        server = make_server(host, port, flask_app)
-        print(colored(f"Serving at http://{host}:{port}\n------", 'green'))
-        server.serve_forever()
+        if self.backend == "FastAPI":
+            app = self._create_fastapi_app()
+            print(colored(f"Serving at http://{host}:{port}\n------", "green"))
+            uvicorn_run(app, host=host, port=port)
+        else:
+            app = self._create_flask_app()
+            server = make_server(host, port, app)
+            print(colored(f"Serving at http://{host}:{port}\n------", "green"))
+            server.serve_forever()
