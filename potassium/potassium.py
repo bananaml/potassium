@@ -1,5 +1,5 @@
 from flask import Flask, request, make_response, abort
-from fastapi import FastAPI, Request, HTTPException
+from fastapi import FastAPI, Request as FastAPIRequest, HTTPException
 from fastapi.responses import JSONResponse
 from fastapi.routing import APIRoute
 from werkzeug.serving import make_server
@@ -17,7 +17,7 @@ class Endpoint:
         self.func = func
 
 
-class Requests:
+class Request:
     def __init__(self, json: dict):
         self.json = json
 
@@ -113,7 +113,7 @@ class Potassium:
 
         if endpoint.type == "handler":
             req_json = flask_request.get_json() if self.backend != "FastAPI" else flask_request
-            req = Requests(json=req_json)
+            req = Request(json=req_json)
             with self._lock:
                 try:
                     out = endpoint.func(req)
@@ -134,7 +134,7 @@ class Potassium:
 
         if endpoint.type == "background":
             req_json = flask_request.get_json() if self.backend != "FastAPI" else flask_request
-            req = Requests(json=req_json)
+            req = Request(json=req_json)
 
             # run as threaded task
             def task(endpoint, lock, req):
@@ -170,7 +170,7 @@ class Potassium:
     def _create_fastapi_app(self):
         fastapi_app = FastAPI()
 
-        async def handle(request: Request, path: str = ""):
+        async def handle(request: FastAPIRequest, path: str = ""):
             request_json = await request.body()
             route = "/" + path
             if route not in self._endpoints:
