@@ -117,10 +117,7 @@ class Potassium:
             with self._lock:
                 try:
                     out = endpoint.func(req)
-                    if self.backend == "FastAPI":
-                        res = JSONResponse(out.json)
-                    else:
-                        res = make_response(out.json)
+                    res = JSONResponse(out.json) if self.backend == "FastAPI" else make_response(out.json)
                     res.status_code = out.status
                     res.headers["X-Endpoint-Type"] = endpoint.type
                     return res
