@@ -17,8 +17,7 @@ def init():
 
     return context
 
-
-@app.handler()
+@app.handler(route = "/")
 def handler(context: dict, request: Request) -> Response:
     prompt = request.json.get("prompt")
     model = context.get("model")
@@ -28,7 +27,6 @@ def handler(context: dict, request: Request) -> Response:
         json={"outputs": outputs},
         status=200
     )
-
 
 if __name__ == "__main__":
     app.serve()
