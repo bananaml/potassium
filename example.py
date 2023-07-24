@@ -18,7 +18,7 @@ def init():
     return context
 
 
-@app.handler()
+@app.handler(route = "/")
 def handler(context: dict, request: Request) -> Response:
     prompt = request.json.get("prompt")
     model = context.get("model")

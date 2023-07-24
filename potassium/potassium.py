@@ -75,7 +75,11 @@ class Potassium():
                         "Potassium Response object json must be a dict")
 
                 return out
+            
 
+            if route in self._endpoints:
+                raise Exception("Route already in use")
+            
             self._endpoints[route] = Endpoint(type="handler", func=wrapper)
             return wrapper
         return actual_decorator
@@ -88,6 +92,9 @@ class Potassium():
             def wrapper(request):
                 # send in app's stateful context if GPU, and the request
                 return func(self._context, request)
+            
+            if route in self._endpoints:
+                raise Exception("Route already in use")
 
             self._endpoints[route] = Endpoint(
                 type="background", func=wrapper)
