@@ -31,11 +31,11 @@ class Potassium():
     def __init__(self, name):
         self.name = name
 
-        def default_func():
-            return
+        def empty_init():
+            return {}
 
         # semi-private vars, not intended for users to modify
-        self._init_func = default_func
+        self._init_func = empty_init
         self._endpoints = {}  # dictionary to store unlimited Endpoints, by unique route
         self._context = {}
         self._lock = Lock()
@@ -54,8 +54,23 @@ class Potassium():
 
         def wrapper():
             self._context = func()
+            if not isinstance(self._context, dict):
+                raise Exception("Potassium init() must return a dictionary")
+            
         self._init_func = wrapper
         return wrapper
+    
+    @staticmethod
+    def _standardize_route(route):
+        # handle empty or None case
+        if len(route) == 0 or route == None:
+            route = "/"
+
+        # prepend with "/" if not already, as router expects
+        if route[0] != "/":
+            route = "/" + route
+        
+        return route
 
     # handler is a blocking http POST handler
     def handler(self, route: str = "/"):
@@ -75,8 +90,9 @@ class Potassium():
                         "Potassium Response object json must be a dict")
 
                 return out
-            
 
+            nonlocal route # we need to modify the route variable in the outer scope
+            route = self._standardize_route(route)
             if route in self._endpoints:
                 raise Exception("Route already in use")
             
@@ -85,7 +101,7 @@ class Potassium():
         return actual_decorator
 
     # background is a non-blocking http POST handler
-    def background(self, route: str = "/"):
+    def background(self, route: str = "/"):    
         "background is a non-blocking http POST handler"
         def actual_decorator(func):
             @functools.wraps(func)
@@ -93,9 +109,11 @@ class Potassium():
                 # send in app's stateful context if GPU, and the request
                 return func(self._context, request)
             
+            nonlocal route # we need to modify the route variable in the outer scope
+            route = self._standardize_route(route)
             if route in self._endpoints:
                 raise Exception("Route already in use")
-
+            
             self._endpoints[route] = Endpoint(
                 type="background", func=wrapper)
             return wrapper
