@@ -1,4 +1,4 @@
-from fastapi import FastAPI, Request as FastAPIRequest, HTTPException
+from fastapi import FastAPI, WebSocket, Request as FastAPIRequest, HTTPException
 from fastapi.responses import JSONResponse
 from fastapi.routing import APIRoute
 from uvicorn import run as uvicorn_run
@@ -7,6 +7,8 @@ import functools
 from queue import Queue, Full
 import traceback
 from termcolor import colored
+import asyncio
+import time
 
 
 class Endpoint:
@@ -16,9 +18,9 @@ class Endpoint:
 
 
 class Request:
-    def __init__(self, json: dict):
+    def __init__(self, json: dict = {}, ws: WebSocket = None):
         self.json = json
-        self.ws = None
+        self.ws = ws
 
 
 class Response:
@@ -104,6 +106,26 @@ class Potassium:
             return wrapper
 
         return actual_decorator
+    
+    # websocket is a blocking http POST handler
+    def websocket(self, route: str = "/"):
+        "handler is a blocking http POST handler"
+
+        def actual_decorator(func):
+            @functools.wraps(func)
+            async def wrapper(request):
+                # send in app's stateful context if GPU, and the request
+                await func(self._context, request)
+
+            nonlocal route # we need to modify the route variable in the outer scope
+            route = self._standardize_route(route)
+            if route in self._endpoints:
+                raise Exception("Route already in use")
+            
+            self._endpoints[route] = Endpoint(type="websocket", func=wrapper)
+            return wrapper
+
+        return actual_decorator
 
     # background is a non-blocking http POST handler
     def background(self, route: str = "/"):    
@@ -119,16 +141,14 @@ class Potassium:
             if route in self._endpoints:
                 raise Exception("Route already in use")
             
-            print("is background", route)
             self._endpoints[route] = Endpoint(
                 type="background", func=wrapper)
             return wrapper
 
         return actual_decorator
 
-    # _handle_generic takes in a request and the endpoint it was routed to and handles it as expected by that endpoint
-    async def _handle_generic(self, endpoint, request):
-
+    # _handle_POST takes in a request and the endpoint it was routed to and handles it as expected by that endpoint
+    async def _handle_POST(self, endpoint, request):
         # potassium rejects if lock already in use
         if self._is_working():
             res = JSONResponse()
@@ -139,10 +159,7 @@ class Potassium:
         req_json = await request.json()
 
         if endpoint.type == "handler":
-            
             req = Request(json=req_json)
-
-            print("is handler")
 
             with self._lock:
                 try:
@@ -162,8 +179,6 @@ class Potassium:
         if endpoint.type == "background":
             req = Request(json=req_json)
 
-            print("is background")
-
             # run as threaded task
             def task(endpoint, lock, req):
                 with lock:
@@ -182,6 +197,27 @@ class Potassium:
             res = JSONResponse({"started": True})
             res.headers["X-Endpoint-Type"] = endpoint.type
             return res
+        
+    # _handle_websocket takes in a request and the endpoint it was routed to and handles it as expected by that endpoint
+    async def _handle_websocket(self, endpoint, websocket: WebSocket):
+        # potassium rejects if lock already in use
+        if self._is_working():
+            res = JSONResponse()
+            res.status_code = 423
+            res.headers["X-Endpoint-Type"] = endpoint.type
+            return res
+        
+        with self._lock:
+            try:
+                await websocket.accept()
+                req = Request(ws=websocket)
+                await endpoint.func(req)
+                await websocket.close()
+            except:
+                await websocket.close()
+                tb_str = traceback.format_exc()
+                print(colored(tb_str, "red"))
+        
 
     def _write_event_chan(self, item):
         try:
@@ -197,17 +233,27 @@ class Potassium:
 
     def _create_fastapi_app(self):
         fastapi_app = FastAPI()
+        fastapi_app.router.route_class = APIRoute
 
         async def handle(request: FastAPIRequest, path: str = ""):
             route = "/" + path
             if route not in self._endpoints:
                 raise HTTPException(status_code=404)
             endpoint = self._endpoints[route]
-            return await self._handle_generic(endpoint, request)
+            return await self._handle_POST(endpoint, request)
+        
+        # add a single catchall route
+        fastapi_app.add_api_route("/{path:path}", handle, methods=["POST"])
 
-        fastapi_app.router.route_class = APIRoute
-        fastapi_app.add_route("/", handle, methods=["POST"])
-        fastapi_app.add_route("/{path:path}", handle, methods=["POST"])
+        async def handle_websocket(websocket: WebSocket):
+            path = websocket.path_params["path"]
+            route = "/" + path
+            if route not in self._endpoints:
+                raise HTTPException(status_code=404)
+            endpoint = self._endpoints[route]
+            return await self._handle_websocket(endpoint, websocket)
+        
+        fastapi_app.add_websocket_route("/{path:path}", handle_websocket)
 
         return fastapi_app
 
