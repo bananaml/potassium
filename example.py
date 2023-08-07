@@ -3,7 +3,7 @@ from potassium import Potassium, Request, Response
 from transformers import pipeline
 import torch
 
-app = Potassium("my_app", backend="FastAPI")
+app = Potassium("my_app")
 
 
 @app.init
@@ -17,13 +17,17 @@ def init():
 
 @app.handler(route = "/")
 def handler(context: dict, request: Request) -> Response:
-    if app.backend == "FastAPI":
-        prompt = json.loads(request.json.decode("utf-8")).get("prompt")
-    else:
-        prompt = request.json.get("prompt")
+    prompt = request.json.get("prompt")
     model = context.get("model")
     outputs = model(prompt)
 
+    return Response(json={"outputs": outputs}, status=200)
+
+@app.background(route = "/bg")
+def bg(context: dict, request: Request) -> Response:
+    prompt = request.json.get("prompt")
+    model = context.get("model")
+    outputs = model(prompt)
     return Response(json={"outputs": outputs}, status=200)
 
 if __name__ == "__main__":
