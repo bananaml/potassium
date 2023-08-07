@@ -15,8 +15,7 @@ def init():
 
     return context
 
-
-@app.handler()
+@app.handler(route = "/")
 def handler(context: dict, request: Request) -> Response:
     if app.backend == "FastAPI":
         prompt = json.loads(request.json.decode("utf-8")).get("prompt")
@@ -26,7 +25,6 @@ def handler(context: dict, request: Request) -> Response:
     outputs = model(prompt)
 
     return Response(json={"outputs": outputs}, status=200)
-
 
 if __name__ == "__main__":
     app.serve()

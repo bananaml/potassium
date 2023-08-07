@@ -35,11 +35,12 @@ class Potassium:
         self.name = name
         self.backend = backend
 
-        def default_func():
-            return
+        # default init function, if the user doesn't specify one
+        def empty_init():
+            return {}
 
         # semi-private vars, not intended for users to modify
-        self._init_func = default_func
+        self._init_func = empty_init
         self._endpoints = {}  # dictionary to store unlimited Endpoints, by unique route
         self._context = {}
         self._lock = Lock()
@@ -57,10 +58,25 @@ class Potassium:
         """
 
         def wrapper():
+            print(colored("Running init()", 'yellow'))
             self._context = func()
-
+            if not isinstance(self._context, dict):
+                raise Exception("Potassium init() must return a dictionary")
+            
         self._init_func = wrapper
         return wrapper
+    
+    @staticmethod
+    def _standardize_route(route):
+        # handle empty or None case
+        if len(route) == 0 or route == None:
+            route = "/"
+
+        # prepend with "/" if not already, as router expects
+        if route[0] != "/":
+            route = "/" + route
+        
+        return route
 
     # handler is a blocking http POST handler
     def handler(self, route: str = "/"):
@@ -81,13 +97,18 @@ class Potassium:
 
                 return out
 
+            nonlocal route # we need to modify the route variable in the outer scope
+            route = self._standardize_route(route)
+            if route in self._endpoints:
+                raise Exception("Route already in use")
+            
             self._endpoints[route] = Endpoint(type="handler", func=wrapper)
             return wrapper
 
         return actual_decorator
 
     # background is a non-blocking http POST handler
-    def background(self, route: str = "/"):
+    def background(self, route: str = "/"):    
         "background is a non-blocking http POST handler"
 
         def actual_decorator(func):
@@ -95,8 +116,14 @@ class Potassium:
             def wrapper(request):
                 # send in app's stateful context if GPU, and the request
                 return func(self._context, request)
-
-            self._endpoints[route] = Endpoint(type="background", func=wrapper)
+            
+            nonlocal route # we need to modify the route variable in the outer scope
+            route = self._standardize_route(route)
+            if route in self._endpoints:
+                raise Exception("Route already in use")
+            
+            self._endpoints[route] = Endpoint(
+                type="background", func=wrapper)
             return wrapper
 
         return actual_decorator
@@ -201,8 +228,7 @@ class Potassium:
 
     # serve runs the http server
     def serve(self, host="0.0.0.0", port=8000):
-        print(colored("------\nStarting Potassium Server 🍌", "yellow"))
-        print(colored("Running init()", "yellow"))
+        print(colored("------\nStarting Potassium Server 🍌", 'yellow'))
         self._init_func()
         if self.backend == "FastAPI":
             app = self._create_fastapi_app()
