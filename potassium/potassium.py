@@ -201,6 +201,14 @@ class Potassium():
             endpoint = self._endpoints[route]
             return self._handle_generic(route, endpoint, request)
 
+        # add __status__ endpoint
+        @flask_app.route('/__status__', methods=["GET"])
+        def status():
+            res = make_response()
+            res.status_code = 200
+            res.headers['X-Endpoint-Type'] = "status"
+            return res
+
         return flask_app
 
     # serve runs the http server
