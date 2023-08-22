@@ -1,8 +1,7 @@
 from flask import Flask, request, make_response, abort
 from werkzeug.serving import make_server
-from threading import Thread, Lock
+from threading import Thread, Lock, Condition
 import functools
-from queue import Queue, Full
 import traceback
 from termcolor import colored
 
@@ -23,13 +22,16 @@ class Response():
         self.json = json
         self.status = status
 
+
 class InvalidEndpointTypeException(Exception):
     def __init__(self):
         super().__init__("Invalid endpoint type. Must be 'handler' or 'background'")
 
+
 class RouteAlreadyInUseException(Exception):
     def __init__(self):
         super().__init__("Route already in use")
+
 
 class Potassium():
     "Potassium is a simple, stateful, GPU-enabled, and autoscaleable web framework for deploying machine learning models."
@@ -42,8 +44,9 @@ class Potassium():
         # dictionary to store unlimited Endpoints, by unique route
         self._endpoints = {}  
         self._context = {}
-        self._lock = Lock()
-        self._event_chan = Queue(maxsize=1)
+        self._gpu_lock = Lock()
+        self._background_task_cv = Condition()
+        self._sequence_number = 0
         self._flask_app = self._create_flask_app()
 
     #
@@ -132,69 +135,73 @@ class Potassium():
     # _handle_generic takes in a request and the endpoint it was routed to and handles it as expected by that endpoint
     def _handle_generic(self, endpoint, flask_request):
         # potassium rejects if lock already in use
-        if self._is_working():
+        try:
+            self._gpu_lock.acquire(blocking=False)
+            self._sequence_number += 1
+        except:
             res = make_response()
             res.status_code = 423
             res.headers['X-Endpoint-Type'] = endpoint.type
             return res
+
+        res = None
 
         if endpoint.type == "handler":
             req = Request(
                 json=flask_request.get_json()
             )
 
-            with self._lock:
-                try:
-                    out = endpoint.func(req)
-                    res = make_response(out.json)
-                    res.status_code = out.status
-                    res.headers['X-Endpoint-Type'] = endpoint.type
-                    return res
-                except:
-                    tb_str = traceback.format_exc()
-                    print(colored(tb_str, "red"))
-                    res = make_response(tb_str)
-                    res.status_code = 500
-                    res.headers['X-Endpoint-Type'] = endpoint.type
-                    return res
-
-        if endpoint.type == "background":
+            try:
+                out = endpoint.func(req)
+                res = make_response(out.json)
+                res.status_code = out.status
+                res.headers['X-Endpoint-Type'] = endpoint.type
+            except:
+                tb_str = traceback.format_exc()
+                print(colored(tb_str, "red"))
+                res = make_response(tb_str)
+                res.status_code = 500
+                res.headers['X-Endpoint-Type'] = endpoint.type
+            self._gpu_lock.release()
+        elif endpoint.type == "background":
             req = Request(
                 json=flask_request.get_json()
             )
 
             # run as threaded task
             def task(endpoint, lock, req):
-                with lock:
-                    try:
-                        endpoint.func(req)
-                    except Exception as e:
-                        # do any cleanup before re-raising user error
-                        self._write_event_chan(True)
-                        raise e
-                self._write_event_chan(True)
+                try:
+                    endpoint.func(req)
+                except Exception as e:
+                    # do any cleanup before re-raising user error
+                    raise e
+                finally:
+                    with self._background_task_cv:
+                        self._background_task_cv.notify_all()
+                        # release lock
+                        lock.release()
 
-            thread = Thread(target=task, args=(endpoint, self._lock, req))
+            thread = Thread(target=task, args=(endpoint, self._gpu_lock, req))
             thread.start()
 
             # send task start success message
             res = make_response({'started': True})
             res.headers['X-Endpoint-Type'] = endpoint.type
-            return res
+        else:
+            raise InvalidEndpointTypeException()
 
-        raise InvalidEndpointTypeException()
+        return res
 
-    def _write_event_chan(self, item):
-        try:
-            self._event_chan.put(item, block=False)
-        except Full:
-            pass
-
+    # WARNING: cover depends on this being called so it should not be changed
     def _read_event_chan(self) -> bool:
-        return self._event_chan.get()
-
-    def _is_working(self):
-        return self._lock.locked()
+        """
+        _read_event_chan essentially waits for a background task to finish, 
+        and then returns True
+        """
+        with self._background_task_cv:
+            # wait until the background task is done
+            self._background_task_cv.wait()
+        return True
 
     def _create_flask_app(self):
         flask_app = Flask(__name__)
@@ -212,9 +219,14 @@ class Potassium():
 
         @flask_app.route('/__status__', methods=["GET"])
         def status():
-            res = make_response()
+            res = make_response({
+                "gpu_available": not self._gpu_lock.locked(),
+                "sequence_number": self._sequence_number
+            })
+
             res.status_code = 200
             res.headers['X-Endpoint-Type'] = "status"
+            res
             return res
 
         return flask_app
