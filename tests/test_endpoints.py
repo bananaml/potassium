@@ -138,7 +138,10 @@ def test_status():
     res = client.get("/__status__", json={})
 
     assert res.status_code == 200
-    assert res.json == {"gpu_available": True}
+    assert res.json == {
+        "gpu_available": True,
+        "sequence_number": 0,
+    }
 
     # send background post in separate thread
     res = client.post("/background", json={})
@@ -148,7 +151,10 @@ def test_status():
     res = client.get("/__status__", json={})
 
     assert res.status_code == 200
-    assert res.json == {"gpu_available": False}
+    assert res.json == {
+        "gpu_available": False,
+        "sequence_number": 1,
+    }
 
     # notify background thread to continue
     with resolve_background_condition:
@@ -161,5 +167,8 @@ def test_status():
     res = client.get("/__status__", json={})
 
     assert res.status_code == 200
-    assert res.json == {"gpu_available": True}
+    assert res.json == {
+        "gpu_available": True,
+        "sequence_number": 1,
+    }
 

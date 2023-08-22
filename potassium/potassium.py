@@ -45,6 +45,7 @@ class Potassium():
         self._endpoints = {}  
         self._context = {}
         self._gpu_lock = Lock()
+        self._sequence_number = 0
         self._flask_app = self._create_flask_app()
 
     #
@@ -135,6 +136,7 @@ class Potassium():
         # potassium rejects if lock already in use
         try:
             self._gpu_lock.acquire(blocking=False)
+            self._sequence_number += 1
         except:
             res = make_response()
             res.status_code = 423
@@ -217,7 +219,8 @@ class Potassium():
         @flask_app.route('/__status__', methods=["GET"])
         def status():
             res = make_response({
-                "gpu_available": not self._gpu_lock.locked()
+                "gpu_available": not self._gpu_lock.locked(),
+                "sequence_number": self._sequence_number
             })
 
             res.status_code = 200
