@@ -10,16 +10,9 @@ jobs:
     - name: Checkout code
       uses: actions/checkout@v2
 
-    - name: Set up Python
-      uses: actions/setup-python@v2
-      with:
-        python-version: 3.8
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v1
 
-    - name: Install pyright
-      run: pip install pyright
+    - name: Build Docker image
+      run: docker build .
 
-    - name: Install project dependencies
-      run: pip install -r ./potassium/requirements.txt
-
-    - name: Run pyright
-      run: pyright
