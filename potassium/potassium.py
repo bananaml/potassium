@@ -27,6 +27,10 @@ class InvalidEndpointTypeException(Exception):
     def __init__(self):
         super().__init__("Invalid endpoint type. Must be 'handler' or 'background'")
 
+class RouteAlreadyInUseException(Exception):
+    def __init__(self):
+        super().__init__("Route already in use")
+
 class Potassium():
     "Potassium is a simple, stateful, GPU-enabled, and autoscaleable web framework for deploying machine learning models."
 
@@ -34,15 +38,13 @@ class Potassium():
         self.name = name
 
         # default init function, if the user doesn't specify one
-        def empty_init():
-            return {}
-
-        # semi-private vars, not intended for users to modify
-        self._init_func = empty_init
-        self._endpoints = {}  # dictionary to store unlimited Endpoints, by unique route
+        self._init_func = lambda: {}
+        # dictionary to store unlimited Endpoints, by unique route
+        self._endpoints = {}  
         self._context = {}
         self._lock = Lock()
         self._event_chan = Queue(maxsize=1)
+        self._flask_app = self._create_flask_app()
 
     #
     def init(self, func):
@@ -79,6 +81,11 @@ class Potassium():
     # handler is a blocking http POST handler
     def handler(self, route: str = "/"):
         "handler is a blocking http POST handler"
+
+        route = self._standardize_route(route)
+        if route in self._endpoints:
+            raise RouteAlreadyInUseException()
+
         def actual_decorator(func):
             @functools.wraps(func)
             def wrapper(request):
@@ -95,10 +102,6 @@ class Potassium():
 
                 return out
 
-            nonlocal route # we need to modify the route variable in the outer scope
-            route = self._standardize_route(route)
-            if route in self._endpoints:
-                raise Exception("Route already in use")
             
             self._endpoints[route] = Endpoint(type="handler", func=wrapper)
             return wrapper
@@ -107,25 +110,27 @@ class Potassium():
     # background is a non-blocking http POST handler
     def background(self, route: str = "/"):    
         "background is a non-blocking http POST handler"
+        route = self._standardize_route(route)
+        if route in self._endpoints:
+            raise RouteAlreadyInUseException()
+
         def actual_decorator(func):
             @functools.wraps(func)
             def wrapper(request):
                 # send in app's stateful context if GPU, and the request
                 return func(self._context, request)
             
-            nonlocal route # we need to modify the route variable in the outer scope
-            route = self._standardize_route(route)
-            if route in self._endpoints:
-                raise Exception("Route already in use")
-            
             self._endpoints[route] = Endpoint(
                 type="background", func=wrapper)
             return wrapper
         return actual_decorator
 
+    def test_client(self):
+        "test_client returns a Flask test client for the app"
+        return self._flask_app.test_client()
+
     # _handle_generic takes in a request and the endpoint it was routed to and handles it as expected by that endpoint
     def _handle_generic(self, endpoint, flask_request):
-
         # potassium rejects if lock already in use
         if self._is_working():
             res = make_response()
@@ -218,7 +223,6 @@ class Potassium():
     def serve(self, host="0.0.0.0", port=8000):
         print(colored("------\nStarting Potassium Server 🍌", 'yellow'))
         self._init_func()
-        flask_app = self._create_flask_app()
-        server = make_server(host, port, flask_app)
+        server = make_server(host, port, self._flask_app)
         print(colored(f"Serving at http://{host}:{port}\n------", 'green'))
         server.serve_forever()
