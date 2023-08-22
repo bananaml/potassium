@@ -169,10 +169,12 @@ class Potassium():
             def task(endpoint, lock, req):
                 try:
                     endpoint.func(req)
-                    lock.release()
                 except Exception as e:
                     # do any cleanup before re-raising user error
                     raise e
+                finally:
+                    # release lock
+                    lock.release()
 
             thread = Thread(target=task, args=(endpoint, self._gpu_lock, req))
             thread.start()
