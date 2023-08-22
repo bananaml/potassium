@@ -1,0 +1,25 @@
+name: Pyright Type Checking
+
+on: [push, pull_request]
+
+jobs:
+  type-check:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v2
+
+    - name: Set up Python
+      uses: actions/setup-python@v2
+      with:
+        python-version: 3.8  # Adjust according to your needs
+
+    - name: Install pyright
+      run: pip install pyright
+
+    - name: Install project dependencies
+      run: pip install -r ./potassium/requirements.txt
+
+    - name: Run pyright
+      run: pyright

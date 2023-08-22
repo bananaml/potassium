@@ -1,4 +1,3 @@
-import requests
 from flask import Flask, request, make_response, abort
 from werkzeug.serving import make_server
 from threading import Thread, Lock
@@ -23,6 +22,9 @@ class Response():
     def __init__(self, status: int = 200, json: dict = {}):
         self.json = json
         self.status = status
+
+class InvalidEndpointTypeException(Exception):
+    pass
 
 
 class Potassium():
@@ -122,7 +124,7 @@ class Potassium():
         return actual_decorator
 
     # _handle_generic takes in a request and the endpoint it was routed to and handles it as expected by that endpoint
-    def _handle_generic(self, route, endpoint, flask_request):
+    def _handle_generic(self, endpoint, flask_request):
 
         # potassium rejects if lock already in use
         if self._is_working():
@@ -175,6 +177,8 @@ class Potassium():
             res.headers['X-Endpoint-Type'] = endpoint.type
             return res
 
+        raise InvalidEndpointTypeException()
+
     def _write_event_chan(self, item):
         try:
             self._event_chan.put(item, block=False)
@@ -199,7 +203,7 @@ class Potassium():
                 abort(404)
 
             endpoint = self._endpoints[route]
-            return self._handle_generic(route, endpoint, request)
+            return self._handle_generic(endpoint, request)
 
         # add __status__ endpoint
         @flask_app.route('/__status__', methods=["GET"])

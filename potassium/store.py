@@ -1,9 +1,4 @@
-import time
-import os
-from typing import Union
-import shelve
-from threading import Thread, Lock
-import atexit
+from typing import Optional, Union, cast
 import redis
 import boto3
 import pickle
@@ -15,15 +10,15 @@ class Entry():
         self.value = value
         self.expiration = expiration
 
+VALID_ENCODINGS = ["json", "pickle"]
 
 class RedisConfig():
-    def __init__(self, host: str, port: str, username: str = None, password: str = None, db: int = 0, encoding: str = "json"):
+    def __init__(self, host: str, port: str, username: Optional[str] = None, password: Optional[str] = None, db: int = 0, encoding: str = "json"):
         "encoding can be 'json' or 'pickle'. JSON is default.\nPickle has better support for arbitrary python types, but using pickle with a remote redis introduces a large security risk, see https://stackoverflow.com/questions/2259270/pickle-or-json/2259351#2259351"
         # validate args
-        encodings = ["json", "pickle"]
-        if encoding not in encodings:
+        if encoding not in VALID_ENCODINGS:
             raise ValueError(
-                "redis config encoding must be one of the following:", encodings)
+                "redis config encoding must be one of the following:", VALID_ENCODINGS)
 
         self.host = host
         self.port = port
@@ -37,10 +32,9 @@ class S3Config():
     def __init__(self, aws_access_key_id, aws_secret_access_key, bucket, encoding: str = "json"):
         "encoding can be 'json' or 'pickle'. JSON is default.\nPickle has better support for arbitrary python types, but using pickle across the network to s3 introduces a large security risk, see https://stackoverflow.com/questions/2259270/pickle-or-json/2259351#2259351"
         # validate args
-        encodings = ["json", "pickle"]
-        if encoding not in encodings:
+        if encoding not in VALID_ENCODINGS:
             raise ValueError(
-                "s3 config encoding must be one of the following:", encodings)
+                "s3 config encoding must be one of the following:", VALID_ENCODINGS)
 
         if aws_access_key_id is None:
             raise ValueError(
@@ -63,14 +57,13 @@ class Store():
             raise ValueError("backend must be one of the following:", backends)
 
         self.backend = backend
-        self.config = config
 
         if self.backend == "redis":
             if not isinstance(config, RedisConfig):
                 raise ValueError("redis backends require users to bring their own redis, and configure the potassium store to use it with the config argument. For example, to use a local redis, create store with:\n\nfrom potassium.store import Store, RedisConfig\nstore = Store(backend = 'redis', config = RedisConfig(host = 'localhost', port = 6379))")
             self._redis_client = redis.Redis(
                 host=config.host,
-                port=config.port,
+                port=int(config.port),
                 username=config.username,
                 password=config.password,
                 db=config.db,
@@ -86,9 +79,12 @@ class Store():
             self._s3_client = session.client('s3')
             self._s3_bucket = config.bucket
 
+        assert config is not None
+        self.config = config
+
     def get(self, key: str):
         if self.backend == "redis":
-            encoded = self._redis_client.get(key)
+            encoded = cast(bytes, self._redis_client.get(key))
             if encoded == None:
                 return None
             if self.config.encoding == "json":
@@ -111,14 +107,21 @@ class Store():
         if self.backend == "redis":
             if self.config.encoding == "json":
                 encoded = json.dumps(value)
-            if self.config.encoding == "pickle":
+            elif self.config.encoding == "pickle":
                 encoded = pickle.dumps(value)
+            else:
+                raise ValueError(
+                    "redis config encoding must be one of the following:", VALID_ENCODINGS)
             self._redis_client.set(key, encoded, ex=ttl)
 
         if self.backend == "s3":
             if self.config.encoding == "json":
                 encoded = json.dumps(value)
-            if self.config.encoding == "pickle":
+            elif self.config.encoding == "pickle":
                 encoded = pickle.dumps(value)
+            else:
+                raise ValueError(
+                    "s3 config encoding must be one of the following:", VALID_ENCODINGS)
             self._s3_client.put_object(
                 Body=encoded, Bucket=self._s3_bucket, Key=key)
+
