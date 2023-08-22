@@ -1,6 +1,6 @@
 from flask import Flask, request, make_response, abort
 from werkzeug.serving import make_server
-from threading import Thread, Lock
+from threading import Thread, Lock, Condition
 import functools
 import traceback
 from termcolor import colored
@@ -45,6 +45,7 @@ class Potassium():
         self._endpoints = {}  
         self._context = {}
         self._gpu_lock = Lock()
+        self._background_task_cv = Condition(self._gpu_lock)
         self._sequence_number = 0
         self._flask_app = self._create_flask_app()
 
@@ -175,6 +176,7 @@ class Potassium():
                     # do any cleanup before re-raising user error
                     raise e
                 finally:
+                    self._background_task_cv.notify_all()
                     # release lock
                     lock.release()
 
@@ -191,16 +193,23 @@ class Potassium():
 
     # TODO - cover depends on this being called so it should not be private
     def _read_event_chan(self) -> bool:
+        """
+        _read_event_chan essentially waits for a background task to finish, 
+        and then returns True
+        """
+        with self._gpu_lock:
+            # wait until the background task is done
+            self._background_task_cv.wait()
+        return True
+
+    # TODO - we should migrate cover to use this instead of _read_event_chan
+    def wait_for_background_task(self):
+        self._read_event_chan()
+
+    def block_until_gpu_lock_released(self):
         # wait until the lock is released to return
         self._gpu_lock.acquire()
         self._gpu_lock.release()
-
-        return True
-
-    # TODO - cover should be updated to point to this method instead of _read_event_chan
-    # when we are happy that enough users have migrated to latest potassium
-    def block_until_gpu_lock_released(self):
-        return self._read_event_chan()
 
     def _create_flask_app(self):
         flask_app = Flask(__name__)

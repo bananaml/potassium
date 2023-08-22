@@ -172,3 +172,43 @@ def test_status():
         "sequence_number": 1,
     }
 
+def test_wait_for_background_task():
+    app = potassium.Potassium("my_app")
+
+    order_of_execution_queue = queue.Queue()
+    resolve_background_condition = threading.Condition()
+
+    @app.init
+    def init():
+        return {}
+
+    @app.background("/background")
+    def background(context: dict, request: potassium.Request):
+        with resolve_background_condition:
+            resolve_background_condition.wait()
+
+    
+    def wait_for_background_task():
+        app.wait_for_background_task()
+        order_of_execution_queue.put("background_task_completed")
+
+    thread = threading.Thread(target=wait_for_background_task)
+    thread.start()
+
+    client = app.test_client()
+
+    # send background post in separate thread
+    order_of_execution_queue.put("send_background_task")
+    res = client.post("/background", json={})
+    assert res.status_code == 200
+
+    # notify background thread to continue
+    with resolve_background_condition:
+        resolve_background_condition.notify()
+
+    thread.join()
+
+    # assert order of execution
+    assert order_of_execution_queue.get() == "send_background_task"
+    assert order_of_execution_queue.get() == "background_task_completed"
+
