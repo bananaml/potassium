@@ -24,8 +24,8 @@ class Response():
         self.status = status
 
 class InvalidEndpointTypeException(Exception):
-    pass
-
+    def __init__(self):
+        super().__init__("Invalid endpoint type. Must be 'handler' or 'background'")
 
 class Potassium():
     "Potassium is a simple, stateful, GPU-enabled, and autoscaleable web framework for deploying machine learning models."
@@ -205,7 +205,6 @@ class Potassium():
             endpoint = self._endpoints[route]
             return self._handle_generic(endpoint, request)
 
-        # add __status__ endpoint
         @flask_app.route('/__status__', methods=["GET"])
         def status():
             res = make_response()
