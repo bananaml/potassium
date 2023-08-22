@@ -13,7 +13,7 @@ jobs:
     - name: Set up Python
       uses: actions/setup-python@v2
       with:
-        python-version: 3.8  # Adjust according to your needs
+        python-version: 3.8
 
     - name: Install pyright
       run: pip install pyright
