@@ -45,7 +45,7 @@ class Potassium():
         self._endpoints = {}  
         self._context = {}
         self._gpu_lock = Lock()
-        self._background_task_cv = Condition(self._gpu_lock)
+        self._background_task_cv = Condition()
         self._sequence_number = 0
         self._flask_app = self._create_flask_app()
 
@@ -176,9 +176,10 @@ class Potassium():
                     # do any cleanup before re-raising user error
                     raise e
                 finally:
-                    self._background_task_cv.notify_all()
-                    # release lock
-                    lock.release()
+                    with self._background_task_cv:
+                        self._background_task_cv.notify_all()
+                        # release lock
+                        lock.release()
 
             thread = Thread(target=task, args=(endpoint, self._gpu_lock, req))
             thread.start()
@@ -191,25 +192,16 @@ class Potassium():
 
         return res
 
-    # TODO - cover depends on this being called so it should not be private
+    # WARNING: cover depends on this being called so it should not be changed
     def _read_event_chan(self) -> bool:
         """
         _read_event_chan essentially waits for a background task to finish, 
         and then returns True
         """
-        with self._gpu_lock:
+        with self._background_task_cv:
             # wait until the background task is done
             self._background_task_cv.wait()
         return True
-
-    # TODO - we should migrate cover to use this instead of _read_event_chan
-    def wait_for_background_task(self):
-        self._read_event_chan()
-
-    def block_until_gpu_lock_released(self):
-        # wait until the lock is released to return
-        self._gpu_lock.acquire()
-        self._gpu_lock.release()
 
     def _create_flask_app(self):
         flask_app = Flask(__name__)

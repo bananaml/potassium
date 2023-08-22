@@ -47,49 +47,6 @@ def test_handler():
     assert res.status_code == 200
     assert res.json == {"hello": "some_path/child_path"}
 
-def test_background():
-    app = potassium.Potassium("my_app")
-
-    order_of_execution_queue = queue.Queue()
-    resolve_background_condition = threading.Condition()
-
-    @app.init
-    def init():
-        return {}
-
-    @app.background("/background")
-    def background(context: dict, request: potassium.Request):
-        order_of_execution_queue.put("background_started")
-        with resolve_background_condition:
-            resolve_background_condition.wait()
-
-    client = app.test_client()
-
-    # send post in separate thread
-    res = client.post("/background", json={})
-    assert res.status_code == 200
-
-    def wait_for_lock():
-        order_of_execution_queue.put("wait_for_lock")
-        app.block_until_gpu_lock_released()
-        order_of_execution_queue.put("lock_released")
-
-    thread = threading.Thread(target=wait_for_lock)
-    thread.start()
-
-    # notify background thread to continue
-    order_of_execution_queue.put("notify_background")
-    with resolve_background_condition:
-        resolve_background_condition.notify()
-
-    thread.join()
-
-    # assert order of execution
-    assert order_of_execution_queue.get() == "background_started"
-    assert order_of_execution_queue.get() == "wait_for_lock"
-    assert order_of_execution_queue.get() == "notify_background"
-    assert order_of_execution_queue.get() == "lock_released"
-
 # parameterized test for path collisions
 @pytest.mark.parametrize("paths", [
     ("/", "",),
@@ -161,7 +118,7 @@ def test_status():
         resolve_background_condition.notify()
 
     # wait for the lock to be released
-    app.block_until_gpu_lock_released()
+    time.sleep(0.1)
 
     # check status
     res = client.get("/__status__", json={})
@@ -189,7 +146,7 @@ def test_wait_for_background_task():
 
     
     def wait_for_background_task():
-        app.wait_for_background_task()
+        app._read_event_chan()
         order_of_execution_queue.put("background_task_completed")
 
     thread = threading.Thread(target=wait_for_background_task)
