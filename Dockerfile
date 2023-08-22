@@ -2,9 +2,12 @@ FROM python:3.8-slim-buster
 
 WORKDIR /potassium
 
-ADD . .
+
+ADD ./potassium/requirements.txt ./potassium/requirements.txt
 
 RUN pip install -r ./potassium/requirements.txt
+
+ADD . .
 
 RUN pip install pyright
 RUN pyright
