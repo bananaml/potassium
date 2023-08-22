@@ -23,6 +23,7 @@ class Response():
         self.json = json
         self.status = status
 
+
 class InvalidEndpointTypeException(Exception):
     def __init__(self):
         super().__init__("Invalid endpoint type. Must be 'handler' or 'background'")
@@ -153,6 +154,7 @@ class Potassium():
         res = None
         self._last_inference_start_time = time.time()
 
+        if endpoint.type == "handler":
         try:
             req = Request(
                 json=flask_request.get_json()
@@ -254,6 +256,7 @@ class Potassium():
 
             res.status_code = 200
             res.headers['X-Endpoint-Type'] = "status"
+            res
             return res
 
         return flask_app
