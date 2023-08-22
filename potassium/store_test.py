@@ -6,7 +6,7 @@ store = Store(
     backend="redis",
     config=RedisConfig(
         host="localhost",
-        port=6379
+        port="6379"
     )
 )
 
@@ -29,7 +29,7 @@ for obj in objs:
 # pickle redis can save complex objects
 
 
-class Complex():
+class ComplexRedis():
     def __init__(self, a) -> None:
         self.a = a
 
@@ -42,14 +42,14 @@ objs = [
     True,
     ["some", "list"],
     {"some": {"nested": "dict"}},
-    Complex(a=1)
+    ComplexRedis(a=1)
 ]
 
 store = Store(
     backend="redis",
     config=RedisConfig(
         host="localhost",
-        port=6379,
+        port="6379",
         encoding="pickle"
     )
 )
@@ -100,7 +100,7 @@ for obj in objs:
 # pickle s3 can save complex objects
 
 
-class Complex():
+class ComplexS3():
     def __init__(self, a) -> None:
         self.a = a
 
@@ -113,7 +113,7 @@ objs = [
     True,
     ["some", "list"],
     {"some": {"nested": "dict"}},
-    Complex(a=1)
+    ComplexS3(a=1)
 ]
 
 store = Store(
