@@ -49,6 +49,7 @@ class Potassium():
         self._background_task_cv = Condition()
         self._sequence_number = 0
         self._idle_start_time = 0
+        self._inference_start_time = 0
         self._flask_app = self._create_flask_app()
 
     #
@@ -147,6 +148,7 @@ class Potassium():
             return res
 
         res = None
+        self._inference_start_time = time.time()
 
         if endpoint.type == "handler":
             req = Request(
@@ -224,6 +226,7 @@ class Potassium():
         @flask_app.route('/__status__', methods=["GET"])
         def status():
             idle_time = 0
+            inference_time = int((time.time() - self._inference_start_time)*1000)
             gpu_available = not self._gpu_lock.locked()
 
             if gpu_available:
@@ -232,7 +235,8 @@ class Potassium():
             res = make_response({
                 "gpu_available": gpu_available,
                 "sequence_number": self._sequence_number,
-                "idle_time": idle_time
+                "idle_time": idle_time,
+                "inference_time": inference_time,
             })
 
             res.status_code = 200
@@ -248,4 +252,5 @@ class Potassium():
         server = make_server(host, port, self._flask_app)
         print(colored(f"Serving at http://{host}:{port}\n------", 'green'))
         self._idle_start_time = time.time()
+        self._inference_start_time = time.time()
         server.serve_forever()

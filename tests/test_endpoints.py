@@ -99,6 +99,7 @@ def test_status():
     assert res.json["gpu_available"] == True
     assert res.json["sequence_number"] == 0
     assert res.json["idle_time"] > 0
+    assert res.json["inference_time"] > 0
 
     # send background post in separate thread
     res = client.post("/background", json={})
@@ -112,6 +113,7 @@ def test_status():
     assert res.json["gpu_available"] == False
     assert res.json["sequence_number"] == 1
     assert res.json["idle_time"] == 0
+    assert res.json["inference_time"] == 0
 
     # notify background thread to continue
     with resolve_background_condition:
@@ -128,6 +130,7 @@ def test_status():
     assert res.json["gpu_available"] == True
     assert res.json["sequence_number"] == 1
     assert res.json["idle_time"] > 0
+    assert res.json["inference_time"] > 0
 
 def test_wait_for_background_task():
     app = potassium.Potassium("my_app")
