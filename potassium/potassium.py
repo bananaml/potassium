@@ -249,7 +249,7 @@ class Potassium():
     def serve(self, host="0.0.0.0", port=8000):
         print(colored("------\nStarting Potassium Server 🍌", 'yellow'))
         self._init_func()
-        server = make_server(host, port, self._flask_app)
+        server = make_server(host, port, self._flask_app, threaded=True)
         print(colored(f"Serving at http://{host}:{port}\n------", 'green'))
         self._idle_start_time = time.time()
         self._inference_start_time = time.time()
