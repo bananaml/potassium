@@ -105,6 +105,9 @@ def test_status():
     res = client.post("/background", json={})
     assert res.status_code == 200
 
+    # add a small sleep for inference time to be above 0
+    time.sleep(0.1)
+
     # check status
     res = client.get("/__status__", json={})
 
@@ -113,7 +116,7 @@ def test_status():
     assert res.json["gpu_available"] == False
     assert res.json["sequence_number"] == 1
     assert res.json["idle_time"] == 0
-    assert res.json["inference_time"] == 0
+    assert res.json["inference_time"] > 0
 
     # notify background thread to continue
     with resolve_background_condition:
