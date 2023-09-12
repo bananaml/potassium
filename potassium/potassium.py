@@ -226,8 +226,12 @@ class Potassium():
         @flask_app.route('/__status__', methods=["GET"])
         def status():
             idle_time = 0
-            inference_time = int((time.time() - self._inference_start_time)*1000)
             gpu_available = not self._gpu_lock.locked()
+
+            if self._inference_start_time != 0:
+                inference_time = int((time.time() - self._inference_start_time)*1000)
+            else:
+                inference_time = 0
 
             if gpu_available:
                 idle_time = int((time.time() - self._idle_start_time)*1000)

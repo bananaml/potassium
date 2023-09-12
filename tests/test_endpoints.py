@@ -99,7 +99,7 @@ def test_status():
     assert res.json["gpu_available"] == True
     assert res.json["sequence_number"] == 0
     assert res.json["idle_time"] > 0
-    assert res.json["inference_time"] > 0
+    assert res.json["inference_time"] == 0
 
     # send background post in separate thread
     res = client.post("/background", json={})
