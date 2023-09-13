@@ -167,6 +167,7 @@ class Potassium():
                 res.status_code = 500
                 res.headers['X-Endpoint-Type'] = endpoint.type
             self._idle_start_time = time.time()
+            self._inference_start_time = 0
             self._gpu_lock.release()
         elif endpoint.type == "background":
             req = Request(
@@ -185,6 +186,7 @@ class Potassium():
                         self._background_task_cv.notify_all()
 
                         self._idle_start_time = time.time()
+                        self._inference_start_time = 0
                         lock.release()
 
             thread = Thread(target=task, args=(endpoint, self._gpu_lock, req))
@@ -228,11 +230,11 @@ class Potassium():
             idle_time = 0
             gpu_available = not self._gpu_lock.locked()
 
-            if self._inference_start_time != 0:
+            if self._inference_start_time != 0:            
                 inference_time = int((time.time() - self._inference_start_time)*1000)
             else:
                 inference_time = 0
-
+            
             if gpu_available:
                 idle_time = int((time.time() - self._idle_start_time)*1000)
 

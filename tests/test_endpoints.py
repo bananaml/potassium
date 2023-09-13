@@ -133,7 +133,7 @@ def test_status():
     assert res.json["gpu_available"] == True
     assert res.json["sequence_number"] == 1
     assert res.json["idle_time"] > 0
-    assert res.json["inference_time"] > 0
+    assert res.json["inference_time"] == 0
 
 def test_wait_for_background_task():
     app = potassium.Potassium("my_app")
