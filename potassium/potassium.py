@@ -256,7 +256,6 @@ class Potassium():
 
             res.status_code = 200
             res.headers['X-Endpoint-Type'] = "status"
-            res
             return res
 
         return flask_app
