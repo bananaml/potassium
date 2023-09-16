@@ -1,3 +1,4 @@
+import time
 from flask import Flask, request, make_response, abort
 from werkzeug.serving import make_server
 from threading import Thread, Lock, Condition
@@ -47,6 +48,8 @@ class Potassium():
         self._gpu_lock = Lock()
         self._background_task_cv = Condition()
         self._sequence_number = 0
+        self._idle_start_time = 0
+        self._last_inference_start_time = None
         self._flask_app = self._create_flask_app()
 
     #
@@ -145,6 +148,7 @@ class Potassium():
             return res
 
         res = None
+        self._last_inference_start_time = time.time()
 
         if endpoint.type == "handler":
             req = Request(
@@ -162,6 +166,8 @@ class Potassium():
                 res = make_response(tb_str)
                 res.status_code = 500
                 res.headers['X-Endpoint-Type'] = endpoint.type
+            self._idle_start_time = time.time()
+            self._last_inference_start_time = None
             self._gpu_lock.release()
         elif endpoint.type == "background":
             req = Request(
@@ -178,7 +184,9 @@ class Potassium():
                 finally:
                     with self._background_task_cv:
                         self._background_task_cv.notify_all()
-                        # release lock
+
+                        self._idle_start_time = time.time()
+                        self._last_inference_start_time = None
                         lock.release()
 
             thread = Thread(target=task, args=(endpoint, self._gpu_lock, req))
@@ -219,14 +227,25 @@ class Potassium():
 
         @flask_app.route('/__status__', methods=["GET"])
         def status():
+            idle_time = 0
+            inference_time = 0
+            gpu_available = not self._gpu_lock.locked()
+
+            if self._last_inference_start_time != None:
+                inference_time = int((time.time() - self._last_inference_start_time)*1000)
+
+            if gpu_available:
+                idle_time = int((time.time() - self._idle_start_time)*1000)
+
             res = make_response({
-                "gpu_available": not self._gpu_lock.locked(),
-                "sequence_number": self._sequence_number
+                "gpu_available": gpu_available,
+                "sequence_number": self._sequence_number,
+                "idle_time": idle_time,
+                "inference_time": inference_time,
             })
 
             res.status_code = 200
             res.headers['X-Endpoint-Type'] = "status"
-            res
             return res
 
         return flask_app
@@ -235,6 +254,7 @@ class Potassium():
     def serve(self, host="0.0.0.0", port=8000):
         print(colored("------\nStarting Potassium Server 🍌", 'yellow'))
         self._init_func()
-        server = make_server(host, port, self._flask_app)
+        server = make_server(host, port, self._flask_app, threaded=True)
         print(colored(f"Serving at http://{host}:{port}\n------", 'green'))
+        self._idle_start_time = time.time()
         server.serve_forever()
