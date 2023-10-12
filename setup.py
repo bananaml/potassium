@@ -1,5 +1,4 @@
 from distutils.core import setup
-import setuptools
 from pathlib import Path
 
 this_directory = Path(__file__).parent
@@ -8,7 +7,7 @@ long_description = (this_directory / "README.md").read_text()
 setup(
     name='potassium',
     packages=['potassium'],
-    version='0.1.2',
+    version='0.2.0',
     license='Apache License 2.0',
     # Give a short description about your library
     description='The potassium package is a flask-like HTTP server for serving large AI models',
