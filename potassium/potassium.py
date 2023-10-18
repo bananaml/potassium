@@ -150,11 +150,17 @@ class Potassium():
         res = None
         self._last_inference_start_time = time.time()
 
-        if endpoint.type == "handler":
+        try:
             req = Request(
                 json=flask_request.get_json()
             )
+        except:
+            res = make_response()
+            res.status_code = 400
+            res.headers['X-Endpoint-Type'] = endpoint.type
+            return res
 
+        if endpoint.type == "handler":
             try:
                 out = endpoint.func(req)
                 res = make_response(out.json)
@@ -170,9 +176,7 @@ class Potassium():
             self._last_inference_start_time = None
             self._gpu_lock.release()
         elif endpoint.type == "background":
-            req = Request(
-                json=flask_request.get_json()
-            )
+
 
             # run as threaded task
             def task(endpoint, lock, req):
