@@ -47,6 +47,14 @@ def test_handler():
     assert res.status_code == 200
     assert res.json == {"hello": "some_path/child_path"}
 
+    res = client.post("/", data='{"key": unquoted_value}', content_type='application/json')
+    assert res.status_code == 400
+    # check status
+    res = client.get("/__status__")
+    assert res.status_code == 200
+    assert res.json is not None
+    assert res.json["gpu_available"] == True
+
 # parameterized test for path collisions
 @pytest.mark.parametrize("paths", [
     ("/", "",),

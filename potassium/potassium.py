@@ -158,6 +158,7 @@ class Potassium():
             res = make_response()
             res.status_code = 400
             res.headers['X-Endpoint-Type'] = endpoint.type
+            self._gpu_lock.release()
             return res
 
         if endpoint.type == "handler":
