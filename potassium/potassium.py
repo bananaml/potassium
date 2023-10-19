@@ -225,7 +225,7 @@ class Potassium():
             endpoint = self._endpoints[route]
             return self._handle_generic(endpoint, request)
         
-        @flask_app.route('/_k/warmup', methods=["GET","POST"])
+        @flask_app.route('/_k/warmup', methods=["POST"])
         def warm():
             res = make_response({
                 "warm": True,

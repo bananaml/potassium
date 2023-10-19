@@ -188,12 +188,6 @@ def test_warmup():
 
     client = app.test_client()
 
-    # POST
     res = client.post("/_k/warmup", json={})
-    assert res.status_code == 200
-    assert res.json == {"warm": True}
-
-    # GET
-    res = client.get("/_k/warmup", json={})
     assert res.status_code == 200
     assert res.json == {"warm": True}
