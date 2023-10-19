@@ -212,6 +212,14 @@ The context dict passed in is a mutable reference, so you can modify it in-place
 
 `app.serve` runs the server, and is a blocking operation.
 
+---
+## Pre-warming your app
+
+Potassium comes with a built-in endpoint for those cases where you want to "warm up" your app to better control the timing of your inference calls. You don't *need* to call it, since your inference call requires `init()` to have run once on server startup anyway, but this gives you a bit more control.
+
+Once your model is warm (i.e., cold boot finished), this endpoint returns a 200. If a cold boot is required, the `init()` function is first called while the server starts up, and then a 200 is returned from this endpoint.
+
+You don't need any extra code to enable it, it comes out of the box and you can call it at `/_k/warmup` as either a GET or POST request.
 
 ---
 

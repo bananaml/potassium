@@ -229,7 +229,17 @@ class Potassium():
 
             endpoint = self._endpoints[route]
             return self._handle_generic(endpoint, request)
+        
+        @flask_app.route('/_k/warmup', methods=["POST"])
+        def warm():
+            res = make_response({
+                "warm": True,
+            })
+            res.status_code = 200
+            res.headers['X-Endpoint-Type'] = "warmup"
+            return res
 
+        @flask_app.route('/_k/status', methods=["GET"])
         @flask_app.route('/__status__', methods=["GET"])
         def status():
             idle_time = 0
