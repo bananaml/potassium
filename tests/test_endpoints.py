@@ -183,3 +183,19 @@ def test_wait_for_background_task():
     assert order_of_execution_queue.get() == "send_background_task"
     assert order_of_execution_queue.get() == "background_task_completed"
 
+def test_warmup():
+    app = potassium.Potassium("my_app")
+
+    @app.init
+    def init():
+        return {}
+
+    @app.handler()
+    def handler(context: dict, request: potassium.Request) -> potassium.Response:
+        raise Exception("should not be called")
+
+    client = app.test_client()
+
+    res = client.post("/_k/warmup", json={})
+    assert res.status_code == 200
+    assert res.json == {"warm": True}
