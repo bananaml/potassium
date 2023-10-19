@@ -28,10 +28,6 @@ class InvalidEndpointTypeException(Exception):
     def __init__(self):
         super().__init__("Invalid endpoint type. Must be 'handler' or 'background'")
 
-class InvalidEndpointTypeException(Exception):
-    def __init__(self):
-        super().__init__("Invalid endpoint type. Must be 'handler' or 'background'")
-
 
 class RouteAlreadyInUseException(Exception):
     def __init__(self):
@@ -154,7 +150,6 @@ class Potassium():
         res = None
         self._last_inference_start_time = time.time()
 
-        if endpoint.type == "handler":
         try:
             req = Request(
                 json=flask_request.get_json()
