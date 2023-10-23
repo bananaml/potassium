@@ -48,6 +48,7 @@ class Potassium():
         self._gpu_lock = Lock()
         self._background_task_cv = Condition()
         self._sequence_number = 0
+        self._sequence_number_lock = Lock()
         self._idle_start_time = 0
         self._last_inference_start_time = None
         self._flask_app = self._create_flask_app()
@@ -140,7 +141,6 @@ class Potassium():
         # potassium rejects if lock already in use
         try:
             self._gpu_lock.acquire(blocking=False)
-            self._sequence_number += 1
         except:
             res = make_response()
             res.status_code = 423
@@ -223,6 +223,8 @@ class Potassium():
         @flask_app.route('/', defaults={'path': ''}, methods=["POST"])
         @flask_app.route('/<path:path>', methods=["POST"])
         def handle(path):
+            with self._sequence_number_lock:
+                self._sequence_number += 1
             route = "/" + path
             if route not in self._endpoints:
                 abort(404)
