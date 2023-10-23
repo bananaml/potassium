@@ -143,6 +143,15 @@ def test_status():
     assert res.json["idle_time"] > 0
     assert res.json["inference_time"] == 0
 
+    res = client.post("/this_path_does_not_exist", json={})
+    assert res.status_code == 404
+    res = client.get("/__status__", json={})
+    assert res.status_code == 200
+    assert res.json is not None
+    assert res.json["gpu_available"] == True
+    assert res.json["sequence_number"] == 2
+
+
 def test_wait_for_background_task():
     app = potassium.Potassium("my_app")
 
