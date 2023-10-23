@@ -225,7 +225,16 @@ class Potassium():
         def handle(path):
             route = "/" + path
             if route not in self._endpoints:
-                abort(404)
+                try:
+                    self._gpu_lock.acquire(blocking=False)
+                    self._sequence_number += 1
+                    self._gpu_lock.release()
+                    return make_response("Route not found", 404)
+                except:
+                    res = make_response()
+                    res.status_code = 423
+                    return res
+
 
             endpoint = self._endpoints[route]
             return self._handle_generic(endpoint, request)
