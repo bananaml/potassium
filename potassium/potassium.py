@@ -225,6 +225,7 @@ class Potassium():
         def handle(path):
             with self._sequence_number_lock:
                 self._sequence_number += 1
+
             route = "/" + path
             if route not in self._endpoints:
                 abort(404)
@@ -234,6 +235,8 @@ class Potassium():
         
         @flask_app.route('/_k/warmup', methods=["POST"])
         def warm():
+            with self._sequence_number_lock:
+                self._sequence_number += 1
             res = make_response({
                 "warm": True,
             })
