@@ -208,3 +208,9 @@ def test_warmup():
     res = client.post("/_k/warmup", json={})
     assert res.status_code == 200
     assert res.json == {"warm": True}
+
+    res = client.get("/__status__", json={})
+    assert res.status_code == 200
+    assert res.json is not None
+    assert res.json["gpu_available"] == True
+    assert res.json["sequence_number"] == 1
