@@ -1,9 +1,11 @@
 import time
-from flask import Flask, request, make_response, abort
+from typing import Optional
+from flask import Flask, request, make_response, abort, Response as FlaskResponse
 from werkzeug.serving import make_server
 from threading import Thread, Lock, Condition
 import functools
 import traceback
+import json as jsonlib
 from termcolor import colored
 
 
@@ -19,9 +21,33 @@ class Request():
 
 
 class Response():
-    def __init__(self, status: int = 200, json: dict = {}):
-        self.json = json
+    def __init__(self, status: int = 200, json: Optional[dict] = None, headers: Optional[dict] = None, body: Optional[bytes] = None):
+        assert json == None or body == None, "Potassium Response object cannot have both json and body set"
+
+        self.headers = headers if headers != None else {}
+
+        # convert json to body if not None
+        if json != None:
+            self.body = jsonlib.dumps(json).encode("utf-8")
+            self.headers["Content-Type"] = "application/json"
+        else:
+            self.body = body
+
         self.status = status
+
+    @property
+    def json(self):
+        if self.body == None:
+            return None
+        try:
+            return jsonlib.loads(self.body.decode("utf-8"))
+        except:
+            return None
+            
+    @json.setter
+    def json(self, json):
+        self.body = jsonlib.dumps(json).encode("utf-8")
+        self.headers["Content-Type"] = "application/json"
 
 
 class InvalidEndpointTypeException(Exception):
@@ -102,10 +128,9 @@ class Potassium():
                 if type(out) != Response:
                     raise Exception("Potassium Response object not returned")
 
-                # check if out.json is a dict
-                if type(out.json) != dict:
+                if type(out.body) != bytes:
                     raise Exception(
-                        "Potassium Response object json must be a dict")
+                        "Potassium Response object body must be bytes")
 
                 return out
 
@@ -144,7 +169,6 @@ class Potassium():
         except:
             res = make_response()
             res.status_code = 423
-            res.headers['X-Endpoint-Type'] = endpoint.type
             return res
 
         res = None
@@ -157,28 +181,26 @@ class Potassium():
         except:
             res = make_response()
             res.status_code = 400
-            res.headers['X-Endpoint-Type'] = endpoint.type
             self._gpu_lock.release()
             return res
 
         if endpoint.type == "handler":
             try:
                 out = endpoint.func(req)
-                res = make_response(out.json)
-                res.status_code = out.status
-                res.headers['X-Endpoint-Type'] = endpoint.type
+
+                # create flask response
+                res = make_response()
+                res = FlaskResponse(
+                    out.body, status=out.status, headers=out.headers)
             except:
                 tb_str = traceback.format_exc()
                 print(colored(tb_str, "red"))
                 res = make_response(tb_str)
                 res.status_code = 500
-                res.headers['X-Endpoint-Type'] = endpoint.type
             self._idle_start_time = time.time()
             self._last_inference_start_time = None
             self._gpu_lock.release()
         elif endpoint.type == "background":
-
-
             # run as threaded task
             def task(endpoint, lock, req):
                 try:
@@ -199,7 +221,6 @@ class Potassium():
 
             # send task start success message
             res = make_response({'started': True})
-            res.headers['X-Endpoint-Type'] = endpoint.type
         else:
             raise InvalidEndpointTypeException()
 
@@ -241,7 +262,6 @@ class Potassium():
                 "warm": True,
             })
             res.status_code = 200
-            res.headers['X-Endpoint-Type'] = "warmup"
             return res
 
         @flask_app.route('/_k/status', methods=["GET"])
@@ -265,7 +285,6 @@ class Potassium():
             })
 
             res.status_code = 200
-            res.headers['X-Endpoint-Type'] = "status"
             return res
 
         return flask_app
