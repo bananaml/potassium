@@ -1,5 +1,6 @@
 import time
-from typing import Optional
+from types import GeneratorType
+from typing import Generator, Optional, Union
 from flask import Flask, request, make_response, abort, Response as FlaskResponse
 from werkzeug.serving import make_server
 from threading import Thread, Lock, Condition
@@ -20,8 +21,10 @@ class Request():
         self.json = json
 
 
+ResponseBody = Union[bytes, Generator[bytes, None, None]]
+
 class Response():
-    def __init__(self, status: int = 200, json: Optional[dict] = None, headers: Optional[dict] = None, body: Optional[bytes] = None):
+    def __init__(self, status: int = 200, json: Optional[dict] = None, headers: Optional[dict] = None, body: Optional[ResponseBody] = None):
         assert json == None or body == None, "Potassium Response object cannot have both json and body set"
 
         self.headers = headers if headers != None else {}
@@ -39,10 +42,12 @@ class Response():
     def json(self):
         if self.body == None:
             return None
-        try:
-            return jsonlib.loads(self.body.decode("utf-8"))
-        except:
-            return None
+        if type(self.body) == bytes:
+            try:
+                return jsonlib.loads(self.body.decode("utf-8"))
+            except:
+                return None
+        return None
             
     @json.setter
     def json(self, json):
@@ -128,9 +133,9 @@ class Potassium():
                 if type(out) != Response:
                     raise Exception("Potassium Response object not returned")
 
-                if type(out.body) != bytes:
+                if type(out.body) != bytes and type(out.body) != GeneratorType:
                     raise Exception(
-                        "Potassium Response object body must be bytes")
+                        "Potassium Response object body must be bytes", type(out.body))
 
                 return out
 
