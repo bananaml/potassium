@@ -26,6 +26,26 @@ def test_handler():
             status=200
         )
 
+    @app.handler("/some_binary_response")
+    def handler3(context: dict, request: potassium.Request) -> potassium.Response:
+        return potassium.Response(
+            body=b"hello",
+            status=200,
+            headers={"Content-Type": "application/octet-stream"}
+        )
+
+    @app.handler("/some_path_byte_stream_response")
+    def handler4(context: dict, request: potassium.Request) -> potassium.Response:
+        def stream():
+            yield b"hello"
+            yield b"world"
+
+        return potassium.Response(
+            body=stream(),
+            status=200,
+            headers={"Content-Type": "application/octet-stream"}
+        )
+
     @app.handler("/some_path/child_path")
     def handler2_id(context: dict, request: potassium.Request) -> potassium.Response:
         return potassium.Response(
@@ -42,6 +62,16 @@ def test_handler():
     res = client.post("/some_path", json={})
     assert res.status_code == 200
     assert res.json == {"hello": "some_path"}
+
+    res = client.post("/some_binary_response", json={})
+    assert res.status_code == 200
+    assert res.data == b"hello"
+    assert res.headers["Content-Type"] == "application/octet-stream"
+
+    res = client.post("/some_path_byte_stream_response", json={})
+    assert res.status_code == 200
+    assert res.data == b"helloworld"
+    assert res.headers["Content-Type"] == "application/octet-stream"
 
     res = client.post("/some_path/child_path", json={})
     assert res.status_code == 200
