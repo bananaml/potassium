@@ -3,6 +3,7 @@ from types import GeneratorType
 from typing import Generator, Optional, Union
 from flask import Flask, request, make_response, abort, Response as FlaskResponse
 from werkzeug.serving import make_server
+from werkzeug.datastructures.headers import EnvironHeaders
 from threading import Thread, Lock, Condition
 import functools
 import traceback
@@ -15,9 +16,8 @@ class Endpoint():
         self.type = type
         self.func = func
 
-
 class Request():
-    def __init__(self, id: str, headers: dict, json: dict):
+    def __init__(self, id: str, headers: EnvironHeaders, json: dict):
         self.id = id
         self.headers = headers
         self.json = json
@@ -183,7 +183,7 @@ class Potassium():
 
         try:
             req = Request(
-                headers=dict(flask_request.headers),
+                headers=flask_request.headers,
                 json=flask_request.get_json(),
                 id=flask_request.headers.get("X-Banana-Request-Id", "")
             )
