@@ -3,6 +3,7 @@ from types import GeneratorType
 from typing import Generator, Optional, Union
 from flask import Flask, request, make_response, abort, Response as FlaskResponse
 from werkzeug.serving import make_server
+from werkzeug.datastructures.headers import EnvironHeaders
 from threading import Thread, Lock, Condition
 import functools
 import traceback
@@ -15,17 +16,18 @@ class Endpoint():
         self.type = type
         self.func = func
 
-
 class Request():
-    def __init__(self, json: dict):
+    def __init__(self, id: str, headers: EnvironHeaders, json: dict):
+        self.id = id
+        self.headers = headers
         self.json = json
-
 
 ResponseBody = Union[bytes, Generator[bytes, None, None]]
 
 class Response():
     def __init__(self, status: int = 200, json: Optional[dict] = None, headers: Optional[dict] = None, body: Optional[ResponseBody] = None):
         assert json == None or body == None, "Potassium Response object cannot have both json and body set"
+
 
         self.headers = headers if headers != None else {}
 
@@ -181,7 +183,9 @@ class Potassium():
 
         try:
             req = Request(
-                json=flask_request.get_json()
+                headers=flask_request.headers,
+                json=flask_request.get_json(),
+                id=flask_request.headers.get("X-Banana-Request-Id", "")
             )
         except:
             res = make_response()

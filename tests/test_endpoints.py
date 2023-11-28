@@ -53,6 +53,17 @@ def test_handler():
             status=200
         )
 
+    @app.handler("/some_headers_request")
+    def handler5(context: dict, request: potassium.Request) -> potassium.Response:
+        assert request.headers["A"] == "a"
+        assert request.headers["B"] == "b"
+        assert request.headers["X-Banana-Request-Id"] == request.id
+        return potassium.Response(
+            headers={"A": "a", "B": "b", "X-Banana-Request-Id": request.id},
+            json={"hello": "some_headers_request", "id": request.id},
+            status=200
+        )
+
     client = app.test_client()
 
     res = client.post("/", json={})
@@ -77,8 +88,18 @@ def test_handler():
     assert res.status_code == 200
     assert res.json == {"hello": "some_path/child_path"}
 
+    # note the capitalization of ID, we're testing that it's case insensitive
+    headers = {"A": "a", "B": "b", "X-Banana-Request-ID": "123"} 
+    res = client.post("/some_headers_request", json={}, headers=headers)
+    assert res.status_code == 200
+    assert res.json == {"hello": "some_headers_request", "id": headers["X-Banana-Request-ID"]}
+    assert res.headers["X-Banana-Request-Id"] == "123"
+    assert res.headers["A"] == "a"
+    assert res.headers["B"] == "b"
+
     res = client.post("/", data='{"key": unquoted_value}', content_type='application/json')
     assert res.status_code == 400
+    
     # check status
     res = client.get("/__status__")
     assert res.status_code == 200
