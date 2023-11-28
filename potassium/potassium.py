@@ -17,15 +17,17 @@ class Endpoint():
 
 
 class Request():
-    def __init__(self, json: dict):
+    def __init__(self, id: str, headers: dict, json: dict):
+        self.id = id
+        self.headers = headers
         self.json = json
-
 
 ResponseBody = Union[bytes, Generator[bytes, None, None]]
 
 class Response():
     def __init__(self, status: int = 200, json: Optional[dict] = None, headers: Optional[dict] = None, body: Optional[ResponseBody] = None):
         assert json == None or body == None, "Potassium Response object cannot have both json and body set"
+
 
         self.headers = headers if headers != None else {}
 
@@ -181,7 +183,9 @@ class Potassium():
 
         try:
             req = Request(
-                json=flask_request.get_json()
+                headers=dict(flask_request.headers),
+                json=flask_request.get_json(),
+                id=flask_request.headers.get("X-Banana-Request-Id", "")
             )
         except:
             res = make_response()
