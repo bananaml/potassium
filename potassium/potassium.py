@@ -172,12 +172,12 @@ class Potassium():
                 # send in app's stateful context if GPU, and the request
                 out = func(context, request)
 
-                if type(out) != Response:
-                    raise Exception("Potassium Response object not returned")
-
-                if type(out.body) != bytes and type(out.body) != GeneratorType:
-                    raise Exception(
-                        "Potassium Response object body must be bytes", type(out.body))
+                if handler_type == HandlerType.HANDLER:
+                    if type(out) != Response:
+                        raise Exception("Potassium Response object not returned")
+                    if type(out.body) != bytes and type(out.body) != GeneratorType:
+                        raise Exception(
+                            "Potassium Response object body must be bytes", type(out.body))
 
                 return out
 
