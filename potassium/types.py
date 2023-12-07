@@ -2,11 +2,6 @@ from dataclasses import dataclass
 from typing import Any, Callable, Dict, Generator, Optional, Union, Generator, Optional, Union
 import json as jsonlib
 
-@dataclass
-class Endpoint():
-    type: str
-    func: Callable
-
 class RequestHeaders():
     def __init__(self, headers: Dict[str, str]):
         self._headers = headers

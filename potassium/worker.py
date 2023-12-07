@@ -51,16 +51,27 @@ class Worker():
     stderr_redirect: FDRedirect
     stdout_redirect: FDRedirect
 
-
 def init_worker(index_queue, event_queue, response_queue, init_func):
     global worker
     worker_num = index_queue.get()
 
+    stdout_redirect = FDRedirect(1)
+    stderr_redirect = FDRedirect(2)
+
+    stderr_redirect.set_prefix(f"[worker {worker_num}] ")
+    stdout_redirect.set_prefix(f"[worker {worker_num}] ")
+
     # check if the init function takes in a worker number
-    if len(inspect.signature(init_func).parameters) == 0:
-        context = init_func()
-    else:
-        context = init_func(worker_num)
+    try:
+        if len(inspect.signature(init_func).parameters) == 0:
+            context = init_func()
+        else:
+            context = init_func(worker_num)
+    except Exception as e:
+        tb_str = traceback.format_exc()
+        print(colored(tb_str, "red"))
+        raise e
+
 
     event_queue.put((StatusEvent.WORKER_STARTED,))
 
@@ -68,8 +79,8 @@ def init_worker(index_queue, event_queue, response_queue, init_func):
         context,
         event_queue,
         response_queue,
-        FDRedirect(1),
-        FDRedirect(2)
+        stdout_redirect,
+        stderr_redirect
     )
 
 def run_worker(func, request, internal_id, use_response=False):

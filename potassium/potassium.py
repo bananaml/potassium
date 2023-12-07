@@ -1,6 +1,9 @@
+from enum import Enum
 import time
 import os
 from types import GeneratorType
+from typing import Callable, Literal, Union
+from dataclasses import dataclass
 from flask import Flask, request, make_response, abort, Response as FlaskResponse
 from huggingface_hub.file_download import uuid
 from werkzeug.serving import make_server
@@ -13,7 +16,16 @@ from multiprocessing.pool import ThreadPool
 from .status import PotassiumStatus, StatusEvent
 from .worker import run_worker, init_worker
 from .exceptions import RouteAlreadyInUseException, InvalidEndpointTypeException
-from .types import Request, Endpoint, RequestHeaders, Response
+from .types import Request, RequestHeaders, Response
+
+class HandlerType(Enum):
+    HANDLER = "HANDLER"
+    BACKGROUND = "BACKGROUND"
+
+@dataclass
+class Endpoint():
+    type: HandlerType
+    func: Callable
 
 class ResponseMailbox():
     def __init__(self, response_queue):
@@ -149,10 +161,7 @@ class Potassium():
         
         return route
 
-    # handler is a blocking http POST handler
-    def handler(self, route: str = "/"):
-        "handler is a blocking http POST handler"
-
+    def _base_decorator(self, route: str, handler_type: HandlerType):
         route = self._standardize_route(route)
         if route in self._endpoints:
             raise RouteAlreadyInUseException()
@@ -173,27 +182,19 @@ class Potassium():
                 return out
 
             
-            self._endpoints[route] = Endpoint(type="handler", func=wrapper)
+            self._endpoints[route] = Endpoint(type=handler_type, func=wrapper)
             return wrapper
         return actual_decorator
+
+    # handler is a blocking http POST handler
+    def handler(self, route: str = "/"):
+        "handler is a blocking http POST handler"
+        return self._base_decorator(route, HandlerType.HANDLER)
 
     # background is a non-blocking http POST handler
     def background(self, route: str = "/"):    
         "background is a non-blocking http POST handler"
-        route = self._standardize_route(route)
-        if route in self._endpoints:
-            raise RouteAlreadyInUseException()
-
-        def actual_decorator(func):
-            @functools.wraps(func)
-            def wrapper(request):
-                # send in app's stateful context if GPU, and the request
-                return func(self._context, request)
-            
-            self._endpoints[route] = Endpoint(
-                type="background", func=wrapper)
-            return wrapper
-        return actual_decorator
+        return self._base_decorator(route, HandlerType.BACKGROUND)
 
     def test_client(self):
         "test_client returns a Flask test client for the app"
@@ -232,7 +233,7 @@ class Potassium():
             # use an internal id for critical path to prevent user from accidentally
             # breaking things by sending multiple requests with the same id
             internal_id = str(uuid.uuid4())
-            if endpoint.type == "handler":
+            if endpoint.type == HandlerType.HANDLER:
                 self._worker_pool.apply_async(run_worker, args=(endpoint.func, req, internal_id, True))
                 resp = self._response_mailbox.get_response(internal_id)
 
@@ -241,7 +242,7 @@ class Potassium():
                     status=resp.status,
                     headers=resp.headers
                 )
-            elif endpoint.type == "background":
+            elif endpoint.type == HandlerType.BACKGROUND:
                 self._worker_pool.apply_async(run_worker, args=(endpoint.func, req, internal_id))
 
                 flask_response = make_response({'started': True})

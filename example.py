@@ -37,6 +37,7 @@ def stream(context: dict, request: Request):
             yield f"{i}\n"
             time.sleep(1)
 
+
     return Response(
         body=stream(),
         status=200,
