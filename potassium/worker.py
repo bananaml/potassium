@@ -45,13 +45,15 @@ class FDRedirect():
 
 @dataclass
 class Worker():
+    worker_num: int
+    total_workers: int
     context: Dict[Any, Any]
     event_queue: Queue
     response_queue: Queue
     stderr_redirect: FDRedirect
     stdout_redirect: FDRedirect
 
-def init_worker(index_queue, event_queue, response_queue, init_func):
+def init_worker(index_queue, event_queue, response_queue, init_func, total_workers):
     global worker
     worker_num = index_queue.get()
 
@@ -76,6 +78,8 @@ def init_worker(index_queue, event_queue, response_queue, init_func):
     event_queue.put((StatusEvent.WORKER_STARTED,))
 
     worker = Worker(
+        worker_num,
+        total_workers,
         context,
         event_queue,
         response_queue,
@@ -85,9 +89,15 @@ def init_worker(index_queue, event_queue, response_queue, init_func):
 
 def run_worker(func, request, internal_id, use_response=False):
     assert worker is not None, "worker is not initialized"
+    
+    if worker.total_workers > 1:
+        prefix = f"[worker {worker.worker_num}, requestID {request.id}] "
+    else:
+        prefix = f"[requestID {request.id}] "
 
-    worker.stderr_redirect.set_prefix(f"[requestID {request.id}] ")
-    worker.stdout_redirect.set_prefix(f"[requestID {request.id}] ")
+
+    worker.stderr_redirect.set_prefix(prefix)
+    worker.stdout_redirect.set_prefix(prefix)
 
     resp = None
     worker.event_queue.put((StatusEvent.INFERENCE_START, internal_id))

@@ -291,7 +291,7 @@ class Potassium():
             Pool = ThreadPool
         else:
             Pool = ProcessPool
-        self._worker_pool = Pool(self._num_workers, init_worker, (index_queue, self._event_queue, self._response_queue, self._init_func))
+        self._worker_pool = Pool(self._num_workers, init_worker, (index_queue, self._event_queue, self._response_queue, self._init_func, self._num_workers))
 
     # serve runs the http server
     def serve(self, host="0.0.0.0", port=8000):

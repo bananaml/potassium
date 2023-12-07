@@ -30,6 +30,12 @@ def handler(context: dict, request: Request) -> Response:
         status=200
     )
 
+@app.background("/background")
+def background(context: dict, request: Request):
+    time.sleep(5)
+    print('hi')
+
+
 @app.handler("/stream")
 def stream(context: dict, request: Request):
     def stream():
