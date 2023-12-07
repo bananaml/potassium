@@ -62,7 +62,7 @@ def init_worker(index_queue, event_queue, response_queue, init_func):
     else:
         context = init_func(worker_num)
 
-    event_queue.put((StatusEvent.WORKER_STARTED, worker_num))
+    event_queue.put((StatusEvent.WORKER_STARTED,))
 
     worker = Worker(
         context,

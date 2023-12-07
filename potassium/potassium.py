@@ -102,6 +102,7 @@ class Potassium():
         self._worker_pool = None
 
         self.event_handler_thread = Thread(target=self._event_handler, daemon=True)
+        self.event_handler_thread.start()
 
         self._status = PotassiumStatus(
             num_started_inference_requests=0,
@@ -240,13 +241,6 @@ class Potassium():
                     status=resp.status,
                     headers=resp.headers
                 )
-
-                def on_close():
-                    print("on_close")
-                    self._response_mailbox.cleanup(internal_id)
-               
-                flask_response.call_on_close(on_close)
-
             elif endpoint.type == "background":
                 self._worker_pool.apply_async(run_worker, args=(endpoint.func, req, internal_id))
 

@@ -35,7 +35,7 @@ class PotassiumStatus():
 
     @property
     def idle_time(self):
-        if not self.gpu_available:
+        if not self.gpu_available or len(self.in_flight_request_start_times) > 0:
             return 0
         return time.time() - self.idle_start_timestamp
 
@@ -53,7 +53,7 @@ class PotassiumStatus():
         event_data = event[1:]
         if event_type not in event_handlers:
             raise Exception(f"Invalid event {event}")
-        return event_handlers[event](self.clone(), *event_data)
+        return event_handlers[event_type](self.clone(), *event_data)
 
 
     def clone(self):
@@ -91,7 +91,7 @@ event_handlers = {
     StatusEvent.INFERENCE_REQUEST_RECEIVED: handle_inference_request_received,
     StatusEvent.INFERENCE_START: handle_start_inference,
     StatusEvent.INFERENCE_END: handle_end_inference,
-    StatusEvent.WORKER_STARTED: lambda status: status,
+    StatusEvent.WORKER_STARTED: handle_worker_started
 }
 
 
