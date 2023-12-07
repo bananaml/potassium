@@ -101,7 +101,6 @@ def run_worker(func, request, internal_id, use_response=False):
             stream_id = 'stream-' + internal_id
             generator = resp.body
             resp.body = None
-        print("has generator: ", generator is not None)
         worker.response_queue.put((internal_id, (resp, stream_id)))
 
         # if the response is a generator, we need to iterate through it

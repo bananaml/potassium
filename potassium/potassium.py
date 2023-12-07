@@ -52,16 +52,30 @@ class ResponseMailbox():
                 self._mailbox[stream_id] = ThreadQueue()
         queue = self._mailbox[stream_id]
 
-        while True:
-            result = queue.get()
-            if isinstance(result, Exception):
-                with self._lock:
-                    del self._mailbox[stream_id]
-                raise result
-            elif result == None:
-                break
-            else:
-                yield result
+        try:
+            while True:
+                result = queue.get()
+                if isinstance(result, Exception):
+                    with self._lock:
+                        del self._mailbox[stream_id]
+                    raise result
+                elif result == None:
+                    break
+                else:
+                    yield result
+        except GeneratorExit:
+            while True:
+                # flush the queue
+                result = queue.get()
+                if result == None:
+                    break
+                elif isinstance(result, Exception):
+                    with self._lock:
+                        del self._mailbox[stream_id]
+                    raise result
+                
+
+            print('generator exit')
 
         with self._lock:
             del self._mailbox[stream_id]
@@ -226,6 +240,13 @@ class Potassium():
                     status=resp.status,
                     headers=resp.headers
                 )
+
+                def on_close():
+                    print("on_close")
+                    self._response_mailbox.cleanup(internal_id)
+               
+                flask_response.call_on_close(on_close)
+
             elif endpoint.type == "background":
                 self._worker_pool.apply_async(run_worker, args=(endpoint.func, req, internal_id))
 
