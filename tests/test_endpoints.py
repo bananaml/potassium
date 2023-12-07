@@ -8,6 +8,7 @@ import potassium
 def test_handler():
     app = potassium.Potassium("my_app")
 
+    global init
     @app.init
     def init():
         return {}
@@ -114,6 +115,7 @@ def test_handler():
 def test_path_collision(paths):
     app = potassium.Potassium("my_app")
 
+    global init
     @app.init
     def init():
         return {}
@@ -139,6 +141,7 @@ def test_status():
 
     resolve_background_condition = threading.Condition()
 
+    global init
     @app.init
     def init():
         return {}
@@ -209,6 +212,7 @@ def test_wait_for_background_task():
     order_of_execution_queue = queue.Queue()
     resolve_background_condition = threading.Condition()
 
+    global init
     @app.init
     def init():
         return {}
@@ -246,6 +250,8 @@ def test_wait_for_background_task():
 def test_warmup():
     app = potassium.Potassium("my_app")
 
+    
+    global init
     @app.init
     def init():
         return {}
