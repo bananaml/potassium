@@ -60,8 +60,9 @@ def init_worker(index_queue, event_queue, response_queue, init_func, total_worke
     stdout_redirect = FDRedirect(1)
     stderr_redirect = FDRedirect(2)
 
-    stderr_redirect.set_prefix(f"[worker {worker_num}] ")
-    stdout_redirect.set_prefix(f"[worker {worker_num}] ")
+    if total_workers > 1:
+        stderr_redirect.set_prefix(f"[worker {worker_num}] ")
+        stdout_redirect.set_prefix(f"[worker {worker_num}] ")
 
     # check if the init function takes in a worker number
     try:
@@ -132,6 +133,9 @@ def run_worker(func, request, internal_id, use_response=False):
             worker.response_queue.put((stream_id, None))
 
 
+    if worker.total_workers == 1:
+        worker.stderr_redirect.set_prefix("")
+        worker.stdout_redirect.set_prefix("")
 
     worker.event_queue.put((StatusEvent.INFERENCE_END, internal_id))
 

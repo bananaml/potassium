@@ -4,13 +4,18 @@ import json as jsonlib
 
 class RequestHeaders():
     def __init__(self, headers: Dict[str, str]):
-        self._headers = headers
+        self._headers = {}
+        for key in headers:
+            self._headers[self._normalize_key(key)] = headers[key]
 
-    def __getitem__(self, key):
+    def _normalize_key(self, key):
         if not isinstance(key, str):
             raise KeyError(key)
-        key = key.upper().replace("-", "_")
-        
+        return key.upper().replace("-", "_")
+
+    def __getitem__(self, key):
+        print(self._headers)
+        key = self._normalize_key(key)
         return self._headers[key]
 
     def get(self, key, default=None):

@@ -10,12 +10,14 @@ class StatusEvent(Enum):
     INFERENCE_START = "INFERENCE_START"
     INFERENCE_END = "INFERENCE_END"
     WORKER_STARTED = "WORKER_STARTED"
+    BAD_REQUEST_RECEIVED = "BAD_REQUEST_RECEIVED"
 
 @dataclass
 class PotassiumStatus():
     """PotassiumStatus is a simple class that represents the status of a Potassium app."""
     num_started_inference_requests: int
     num_completed_inference_requests: int
+    num_bad_requests: int
     num_workers: int
     num_workers_started: int
     idle_start_timestamp: float
@@ -31,7 +33,7 @@ class PotassiumStatus():
 
     @property
     def sequence_number(self):
-        return self.num_started_inference_requests
+        return self.num_started_inference_requests + self.num_bad_requests
 
     @property
     def idle_time(self):
@@ -48,7 +50,7 @@ class PotassiumStatus():
 
         return time.time() - oldest_start_time
 
-    def update(self, event):
+    def update(self, event) -> "PotassiumStatus":
         event_type = event[0]
         event_data = event[1:]
         if event_type not in event_handlers:
@@ -60,6 +62,7 @@ class PotassiumStatus():
         return PotassiumStatus(
             self.num_started_inference_requests,
             self.num_completed_inference_requests,
+            self.num_bad_requests,
             self.num_workers,
             self.num_workers_started,
             self.idle_start_timestamp,
@@ -87,11 +90,16 @@ def handle_worker_started(status: PotassiumStatus):
     status.num_workers_started += 1
     return status
 
+def handle_bad_request_received(status: PotassiumStatus):
+    status.num_bad_requests += 1
+    return status
+
 event_handlers = {
     StatusEvent.INFERENCE_REQUEST_RECEIVED: handle_inference_request_received,
     StatusEvent.INFERENCE_START: handle_start_inference,
     StatusEvent.INFERENCE_END: handle_end_inference,
-    StatusEvent.WORKER_STARTED: handle_worker_started
+    StatusEvent.WORKER_STARTED: handle_worker_started,
+    StatusEvent.BAD_REQUEST_RECEIVED: handle_bad_request_received
 }
 
 

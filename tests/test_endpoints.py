@@ -4,11 +4,9 @@ import time
 import pytest
 import potassium
 
-
 def test_handler():
     app = potassium.Potassium("my_app")
 
-    global init
     @app.init
     def init():
         return {}
@@ -102,10 +100,19 @@ def test_handler():
     assert res.status_code == 400
     
     # check status
-    res = client.get("/__status__")
-    assert res.status_code == 200
-    assert res.json is not None
-    assert res.json["gpu_available"] == True
+    count = 0
+    while True:
+        res = client.get("/__status__")
+        assert res.status_code == 200
+        assert res.json is not None
+
+        if res.json["gpu_available"] == True:
+            break
+        elif count > 10:
+            assert False, "GPU never became available"
+        else:
+            time.sleep(0.1)
+            count += 1
 
 # parameterized test for path collisions
 @pytest.mark.parametrize("paths", [
@@ -115,7 +122,6 @@ def test_handler():
 def test_path_collision(paths):
     app = potassium.Potassium("my_app")
 
-    global init
     @app.init
     def init():
         return {}
@@ -141,7 +147,6 @@ def test_status():
 
     resolve_background_condition = threading.Condition()
 
-    global init
     @app.init
     def init():
         return {}
@@ -199,6 +204,8 @@ def test_status():
 
     res = client.post("/this_path_does_not_exist", json={})
     assert res.status_code == 404
+    # takes a split second for the status to update
+    time.sleep(0.1)
     res = client.get("/__status__", json={})
     assert res.status_code == 200
     assert res.json is not None
@@ -212,7 +219,6 @@ def test_wait_for_background_task():
     order_of_execution_queue = queue.Queue()
     resolve_background_condition = threading.Condition()
 
-    global init
     @app.init
     def init():
         return {}
@@ -223,35 +229,40 @@ def test_wait_for_background_task():
             resolve_background_condition.wait()
 
     
-    def wait_for_background_task():
-        app._read_event_chan()
-        order_of_execution_queue.put("background_task_completed")
-
-    thread = threading.Thread(target=wait_for_background_task)
-    thread.start()
-
     client = app.test_client()
 
     # send background post in separate thread
-    order_of_execution_queue.put("send_background_task")
     res = client.post("/background", json={})
     assert res.status_code == 200
+
+
+    time.sleep(0.1)
+
+    res = client.get("/__status__", json={})
+
+    assert res.status_code == 200
+    assert res.json is not None
+    assert res.json["gpu_available"] == False
+    assert res.json["sequence_number"] == 1
 
     # notify background thread to continue
     with resolve_background_condition:
         resolve_background_condition.notify()
 
-    thread.join()
+    time.sleep(0.1)
 
-    # assert order of execution
-    assert order_of_execution_queue.get() == "send_background_task"
-    assert order_of_execution_queue.get() == "background_task_completed"
+    res = client.get("/__status__", json={})
+
+    assert res.status_code == 200
+    assert res.json is not None
+    assert res.json["gpu_available"] == True
+    assert res.json["sequence_number"] == 1
+
+
 
 def test_warmup():
     app = potassium.Potassium("my_app")
 
-    
-    global init
     @app.init
     def init():
         return {}
@@ -266,6 +277,7 @@ def test_warmup():
     assert res.status_code == 200
     assert res.json == {"warm": True}
 
+    time.sleep(0.1)
     res = client.get("/__status__", json={})
     assert res.status_code == 200
     assert res.json is not None

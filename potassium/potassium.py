@@ -2,10 +2,10 @@ from enum import Enum
 import time
 import os
 from types import GeneratorType
-from typing import Callable, Literal, Union
+from typing import Callable
 from dataclasses import dataclass
 from flask import Flask, request, make_response, abort, Response as FlaskResponse
-from huggingface_hub.file_download import uuid
+import uuid
 from werkzeug.serving import make_server
 from threading import Thread, Lock
 from queue import Queue as ThreadQueue
@@ -37,12 +37,16 @@ class ResponseMailbox():
         t.start()
 
     def _response_handler(self):
-        while True:
-            request_id, payload = self._response_queue.get()
-            with self._lock:
-                if request_id not in self._mailbox:
-                    self._mailbox[request_id] = ThreadQueue()
-                self._mailbox[request_id].put(payload)
+        try:
+            while True:
+                request_id, payload = self._response_queue.get()
+                with self._lock:
+                    if request_id not in self._mailbox:
+                        self._mailbox[request_id] = ThreadQueue()
+                    self._mailbox[request_id].put(payload)
+        except EOFError:
+            # queue closed, this happens when the server is shutting down
+            pass
 
     def get_response(self, request_id):
         with self._lock:
@@ -119,6 +123,7 @@ class Potassium():
         self._status = PotassiumStatus(
             num_started_inference_requests=0,
             num_completed_inference_requests=0,
+            num_bad_requests=0,
             num_workers=self._num_workers,
             num_workers_started=0,
             idle_start_timestamp=time.time(),
@@ -126,9 +131,14 @@ class Potassium():
         )
 
     def _event_handler(self):
-        while True:
-            event = self._event_queue.get()
-            self._status = self._status.update(event)
+        try:
+            while True:
+                event = self._event_queue.get()
+                self._status = self._status.update(event)
+        except EOFError:
+            # this happens when the process is shutting down
+            pass
+
 
     def init(self, func):
         """init runs once on server start, and is used to initialize the app's context.
@@ -210,6 +220,7 @@ class Potassium():
         def handle(path):
             route = "/" + path
             if route not in self._endpoints:
+                self._event_queue.put((StatusEvent.BAD_REQUEST_RECEIVED,))
                 abort(404)
 
             endpoint = self._endpoints[route]
@@ -225,6 +236,7 @@ class Potassium():
             except:
                 res = make_response()
                 res.status_code = 400
+                self._event_queue.put((StatusEvent.BAD_REQUEST_RECEIVED,))
                 return res
 
             self._event_queue.put((StatusEvent.INFERENCE_REQUEST_RECEIVED,))
@@ -257,7 +269,7 @@ class Potassium():
 
             # a bit of a hack but we need to send a start and end event to the event queue
             # in order to update the status the way the load balancer expects
-            self._event_queue.put((StatusEvent.INFERENCE_START, request_id))
+            self._event_queue.put((StatusEvent.INFERENCE_REQUEST_RECEIVED,))
             self._event_queue.put((StatusEvent.INFERENCE_END, request_id))
             res = make_response({
                 "warm": True,
@@ -293,12 +305,17 @@ class Potassium():
             Pool = ProcessPool
         self._worker_pool = Pool(self._num_workers, init_worker, (index_queue, self._event_queue, self._response_queue, self._init_func, self._num_workers))
 
+        while True:
+            if self._status.num_workers_started == self._num_workers:
+                break
+        print(colored(f"Started {self._num_workers} workers", 'green'))
+
     # serve runs the http server
     def serve(self, host="0.0.0.0", port=8000):
         print(colored("------\nStarting Potassium Server 🍌", 'yellow'))
+        self._init_server()
         server = make_server(host, port, self._flask_app, threaded=True)
         print(colored(f"Serving at http://{host}:{port}\n------", 'green'))
-        self._init_server()
 
         server.serve_forever()
 
