@@ -89,10 +89,6 @@ class ResponseMailbox():
                     with self._lock:
                         del self._mailbox[stream_id]
                     raise result
-                
-
-            print('generator exit')
-
         with self._lock:
             del self._mailbox[stream_id]
 
@@ -100,7 +96,7 @@ class ResponseMailbox():
 class Potassium():
     "Potassium is a simple, stateful, GPU-enabled, and autoscaleable web framework for deploying machine learning models."
 
-    def __init__(self, name):
+    def __init__(self, name, experimental_num_workers=1):
         self.name = name
 
         # default init function, if the user doesn't specify one
@@ -113,7 +109,7 @@ class Potassium():
         self._response_queue = ProcessQueue()
         self._response_mailbox = ResponseMailbox(self._response_queue)
 
-        self._num_workers = int(os.environ.get("POTASSIUM_NUM_WORKERS", 1))
+        self._num_workers = experimental_num_workers
 
         self._worker_pool = None
 
@@ -150,12 +146,6 @@ class Potassium():
         - the context is not shared between multiple replicas of the app
         """
 
-        # def wrapper(worker_num):
-        #     print(colored("Running init()", 'yellow'))
-        #     self._context = func(worker_num)
-        #     if not isinstance(self._context, dict):
-        #         raise Exception("Potassium init() must return a dictionary")
-            
         self._init_func = func
         return func
     
@@ -303,7 +293,17 @@ class Potassium():
             Pool = ThreadPool
         else:
             Pool = ProcessPool
-        self._worker_pool = Pool(self._num_workers, init_worker, (index_queue, self._event_queue, self._response_queue, self._init_func, self._num_workers))
+        self._worker_pool = Pool(
+            self._num_workers,
+            init_worker, 
+            (
+                index_queue,
+                self._event_queue,
+                self._response_queue, 
+                self._init_func,
+                self._num_workers
+            )
+        )
 
         while True:
             if self._status.num_workers_started == self._num_workers:

@@ -65,6 +65,7 @@ def init_worker(index_queue, event_queue, response_queue, init_func, total_worke
         stdout_redirect.set_prefix(f"[worker {worker_num}] ")
 
     # check if the init function takes in a worker number
+    print(colored("Running init()", 'yellow'))
     try:
         if len(inspect.signature(init_func).parameters) == 0:
             context = init_func()
@@ -75,6 +76,8 @@ def init_worker(index_queue, event_queue, response_queue, init_func, total_worke
         print(colored(tb_str, "red"))
         raise e
 
+    if not isinstance(context, dict):
+        raise Exception("Potassium init() must return a dictionary")
 
     event_queue.put((StatusEvent.WORKER_STARTED,))
 

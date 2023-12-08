@@ -5,6 +5,9 @@ from dataclasses import dataclass
 
 from .types import RequestID
 
+class InvalidStatusEvent(Exception):
+    pass
+
 class StatusEvent(Enum):
     INFERENCE_REQUEST_RECEIVED = "INFERENCE_REQUEST_RECEIVED"
     INFERENCE_START = "INFERENCE_START"
@@ -54,7 +57,7 @@ class PotassiumStatus():
         event_type = event[0]
         event_data = event[1:]
         if event_type not in event_handlers:
-            raise Exception(f"Invalid event {event}")
+            raise InvalidStatusEvent(f"Invalid status event: {event_type}")
         return event_handlers[event_type](self.clone(), *event_data)
 
 
