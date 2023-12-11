@@ -17,6 +17,7 @@ from .status import PotassiumStatus, StatusEvent
 from .worker import run_worker, init_worker
 from .exceptions import RouteAlreadyInUseException, InvalidEndpointTypeException
 from .types import Request, RequestHeaders, Response
+import logging
 
 class HandlerType(Enum):
     HANDLER = "HANDLER"
@@ -116,15 +117,7 @@ class Potassium():
         self.event_handler_thread = Thread(target=self._event_handler, daemon=True)
         self.event_handler_thread.start()
 
-        self._status = PotassiumStatus(
-            num_started_inference_requests=0,
-            num_completed_inference_requests=0,
-            num_bad_requests=0,
-            num_workers=self._num_workers,
-            num_workers_started=0,
-            idle_start_timestamp=time.time(),
-            in_flight_request_start_times=[]
-        )
+        self._status = PotassiumStatus.initial(self._num_workers)
 
     def _event_handler(self):
         try:
@@ -285,6 +278,15 @@ class Potassium():
         return flask_app
     
     def _init_server(self):
+        # unless the user has already set up logging, set up logging to stdout using
+        # a separate fd so that we don't get in the way of request logs
+        log = logging.getLogger('werkzeug')
+        if len(log.handlers) == 0:
+            # duplicate stdout
+            stdout_copy = os.dup(1)
+            # redirect flask logs to stdout_copy
+            log.addHandler(logging.StreamHandler(os.fdopen(stdout_copy, 'w')))
+
         self._idle_start_time = time.time()
         index_queue = ProcessQueue()
         for i in range(self._num_workers):

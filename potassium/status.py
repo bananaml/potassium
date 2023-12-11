@@ -26,12 +26,26 @@ class PotassiumStatus():
     idle_start_timestamp: float
     in_flight_request_start_times: List[Tuple[RequestID, float]]
 
+    @staticmethod
+    def initial(num_workers: int) -> "PotassiumStatus":
+        return PotassiumStatus(
+            num_started_inference_requests=0,
+            num_completed_inference_requests=0,
+            num_bad_requests=0,
+            num_workers=num_workers,
+            num_workers_started=0,
+            idle_start_timestamp=time.time(),
+            in_flight_request_start_times=[]
+        )
+
     @property
     def requests_in_progress(self):
         return self.num_started_inference_requests - self.num_completed_inference_requests
 
     @property
     def gpu_available(self):
+        if self.num_workers_started < self.num_workers:
+            return False
         return self.num_workers - self.requests_in_progress > 0
 
     @property
@@ -40,7 +54,9 @@ class PotassiumStatus():
 
     @property
     def idle_time(self):
-        if not self.gpu_available or len(self.in_flight_request_start_times) > 0:
+        num_received_requests_not_completed = self.num_started_inference_requests - self.num_completed_inference_requests
+        has_incomplete_requests = num_received_requests_not_completed > 0
+        if not self.gpu_available or has_incomplete_requests:
             return 0
         return time.time() - self.idle_start_timestamp
 
