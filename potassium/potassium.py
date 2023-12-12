@@ -268,8 +268,8 @@ class Potassium():
             res = make_response({
                 "gpu_available": cur_status.gpu_available,
                 "sequence_number": cur_status.sequence_number,
-                "idle_time": cur_status.idle_time,
-                "inference_time": cur_status.longest_inference_time,
+                "idle_time": int(cur_status.idle_time*1000),
+                "inference_time": int(cur_status.longest_inference_time*1000),
             })
 
             res.status_code = 200
