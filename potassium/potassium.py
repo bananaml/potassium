@@ -1,92 +1,134 @@
+from enum import Enum
 import time
+import os
 from types import GeneratorType
-from typing import Generator, Optional, Union
+from typing import Callable
+from dataclasses import dataclass
 from flask import Flask, request, make_response, abort, Response as FlaskResponse
+import uuid
 from werkzeug.serving import make_server
-from werkzeug.datastructures.headers import EnvironHeaders
-from threading import Thread, Lock, Condition
+from threading import Thread, Lock
+from queue import Queue as ThreadQueue
 import functools
-import traceback
-import json as jsonlib
 from termcolor import colored
+from multiprocessing import Pool as ProcessPool, Queue as ProcessQueue
+from multiprocessing.pool import ThreadPool
+from .status import PotassiumStatus, StatusEvent
+from .worker import run_worker, init_worker
+from .exceptions import RouteAlreadyInUseException, InvalidEndpointTypeException
+from .types import Request, RequestHeaders, Response
+import logging
 
+class HandlerType(Enum):
+    HANDLER = "HANDLER"
+    BACKGROUND = "BACKGROUND"
 
+@dataclass
 class Endpoint():
-    def __init__(self, type, func):
-        self.type = type
-        self.func = func
+    type: HandlerType
+    func: Callable
 
-class Request():
-    def __init__(self, id: str, headers: EnvironHeaders, json: dict):
-        self.id = id
-        self.headers = headers
-        self.json = json
+class ResponseMailbox():
+    def __init__(self, response_queue):
+        self._response_queue = response_queue
+        self._mailbox = {}
+        self._lock = Lock()
 
-ResponseBody = Union[bytes, Generator[bytes, None, None]]
+        t = Thread(target=self._response_handler, daemon=True)
+        t.start()
 
-class Response():
-    def __init__(self, status: int = 200, json: Optional[dict] = None, headers: Optional[dict] = None, body: Optional[ResponseBody] = None):
-        assert json == None or body == None, "Potassium Response object cannot have both json and body set"
+    def _response_handler(self):
+        try:
+            while True:
+                request_id, payload = self._response_queue.get()
+                with self._lock:
+                    if request_id not in self._mailbox:
+                        self._mailbox[request_id] = ThreadQueue()
+                    self._mailbox[request_id].put(payload)
+        except EOFError:
+            # queue closed, this happens when the server is shutting down
+            pass
 
+    def get_response(self, request_id):
+        with self._lock:
+            if request_id not in self._mailbox:
+                self._mailbox[request_id] = ThreadQueue()
+        result, stream_id = self._mailbox[request_id].get()
 
-        self.headers = headers if headers != None else {}
+        if stream_id is not None:
+            result.body = self._stream_body(stream_id)
 
-        # convert json to body if not None
-        if json != None:
-            self.body = jsonlib.dumps(json).encode("utf-8")
-            self.headers["Content-Type"] = "application/json"
-        else:
-            self.body = body
+        with self._lock:
+            del self._mailbox[request_id]
 
-        self.status = status
+        return result
 
-    @property
-    def json(self):
-        if self.body == None:
-            return None
-        if type(self.body) == bytes:
-            try:
-                return jsonlib.loads(self.body.decode("utf-8"))
-            except:
-                return None
-        return None
-            
-    @json.setter
-    def json(self, json):
-        self.body = jsonlib.dumps(json).encode("utf-8")
-        self.headers["Content-Type"] = "application/json"
+    def _stream_body(self, stream_id):
+        with self._lock:
+            if stream_id not in self._mailbox:
+                self._mailbox[stream_id] = ThreadQueue()
+        queue = self._mailbox[stream_id]
 
-
-class InvalidEndpointTypeException(Exception):
-    def __init__(self):
-        super().__init__("Invalid endpoint type. Must be 'handler' or 'background'")
-
-
-class RouteAlreadyInUseException(Exception):
-    def __init__(self):
-        super().__init__("Route already in use")
+        try:
+            while True:
+                result = queue.get()
+                if isinstance(result, Exception):
+                    with self._lock:
+                        del self._mailbox[stream_id]
+                    raise result
+                elif result == None:
+                    break
+                else:
+                    yield result
+        except GeneratorExit:
+            while True:
+                # flush the queue
+                result = queue.get()
+                if result == None:
+                    break
+                elif isinstance(result, Exception):
+                    with self._lock:
+                        del self._mailbox[stream_id]
+                    raise result
+        with self._lock:
+            del self._mailbox[stream_id]
 
 
 class Potassium():
     "Potassium is a simple, stateful, GPU-enabled, and autoscaleable web framework for deploying machine learning models."
 
-    def __init__(self, name):
+    def __init__(self, name, experimental_num_workers=1):
         self.name = name
 
         # default init function, if the user doesn't specify one
-        self._init_func = lambda: {}
+        self._init_func = lambda _: {}
         # dictionary to store unlimited Endpoints, by unique route
         self._endpoints = {}  
         self._context = {}
-        self._gpu_lock = Lock()
-        self._background_task_cv = Condition()
-        self._sequence_number = 0
-        self._sequence_number_lock = Lock()
-        self._idle_start_time = 0
-        self._last_inference_start_time = None
         self._flask_app = self._create_flask_app()
+        self._event_queue = ProcessQueue()
+        self._response_queue = ProcessQueue()
+        self._response_mailbox = ResponseMailbox(self._response_queue)
 
-    #
+        self._num_workers = experimental_num_workers
+
+        self._worker_pool = None
+
+        self.event_handler_thread = Thread(target=self._event_handler, daemon=True)
+        self.event_handler_thread.start()
+
+        self._status = PotassiumStatus.initial(self._num_workers)
+
+    def _event_handler(self):
+        try:
+            while True:
+                event = self._event_queue.get()
+                self._status = self._status.update(event)
+        except EOFError:
+            # this happens when the process is shutting down
+            pass
+
+
     def init(self, func):
         """init runs once on server start, and is used to initialize the app's context.
         You can use this to load models onto the GPU, set up connections, etc.
@@ -97,14 +139,8 @@ class Potassium():
         - the context is not shared between multiple replicas of the app
         """
 
-        def wrapper():
-            print(colored("Running init()", 'yellow'))
-            self._context = func()
-            if not isinstance(self._context, dict):
-                raise Exception("Potassium init() must return a dictionary")
-            
-        self._init_func = wrapper
-        return wrapper
+        self._init_func = func
+        return func
     
     @staticmethod
     def _standardize_route(route):
@@ -118,133 +154,45 @@ class Potassium():
         
         return route
 
-    # handler is a blocking http POST handler
-    def handler(self, route: str = "/"):
-        "handler is a blocking http POST handler"
-
+    def _base_decorator(self, route: str, handler_type: HandlerType):
         route = self._standardize_route(route)
         if route in self._endpoints:
             raise RouteAlreadyInUseException()
 
         def actual_decorator(func):
             @functools.wraps(func)
-            def wrapper(request):
+            def wrapper(context, request):
                 # send in app's stateful context if GPU, and the request
-                out = func(self._context, request)
+                out = func(context, request)
 
-                if type(out) != Response:
-                    raise Exception("Potassium Response object not returned")
-
-                if type(out.body) != bytes and type(out.body) != GeneratorType:
-                    raise Exception(
-                        "Potassium Response object body must be bytes", type(out.body))
+                if handler_type == HandlerType.HANDLER:
+                    if type(out) != Response:
+                        raise Exception("Potassium Response object not returned")
+                    if type(out.body) != bytes and type(out.body) != GeneratorType:
+                        raise Exception(
+                            "Potassium Response object body must be bytes", type(out.body))
 
                 return out
 
             
-            self._endpoints[route] = Endpoint(type="handler", func=wrapper)
+            self._endpoints[route] = Endpoint(type=handler_type, func=wrapper)
             return wrapper
         return actual_decorator
+
+    # handler is a blocking http POST handler
+    def handler(self, route: str = "/"):
+        "handler is a blocking http POST handler"
+        return self._base_decorator(route, HandlerType.HANDLER)
 
     # background is a non-blocking http POST handler
     def background(self, route: str = "/"):    
         "background is a non-blocking http POST handler"
-        route = self._standardize_route(route)
-        if route in self._endpoints:
-            raise RouteAlreadyInUseException()
-
-        def actual_decorator(func):
-            @functools.wraps(func)
-            def wrapper(request):
-                # send in app's stateful context if GPU, and the request
-                return func(self._context, request)
-            
-            self._endpoints[route] = Endpoint(
-                type="background", func=wrapper)
-            return wrapper
-        return actual_decorator
+        return self._base_decorator(route, HandlerType.BACKGROUND)
 
     def test_client(self):
         "test_client returns a Flask test client for the app"
+        self._init_server()
         return self._flask_app.test_client()
-
-    # _handle_generic takes in a request and the endpoint it was routed to and handles it as expected by that endpoint
-    def _handle_generic(self, endpoint, flask_request):
-        # potassium rejects if lock already in use
-        try:
-            self._gpu_lock.acquire(blocking=False)
-        except:
-            res = make_response()
-            res.status_code = 423
-            return res
-
-        res = None
-        self._last_inference_start_time = time.time()
-
-        try:
-            req = Request(
-                headers=flask_request.headers,
-                json=flask_request.get_json(),
-                id=flask_request.headers.get("X-Banana-Request-Id", "")
-            )
-        except:
-            res = make_response()
-            res.status_code = 400
-            self._gpu_lock.release()
-            return res
-
-        if endpoint.type == "handler":
-            try:
-                out = endpoint.func(req)
-
-                # create flask response
-                res = make_response()
-                res = FlaskResponse(
-                    out.body, status=out.status, headers=out.headers)
-            except:
-                tb_str = traceback.format_exc()
-                print(colored(tb_str, "red"))
-                res = make_response(tb_str)
-                res.status_code = 500
-            self._idle_start_time = time.time()
-            self._last_inference_start_time = None
-            self._gpu_lock.release()
-        elif endpoint.type == "background":
-            # run as threaded task
-            def task(endpoint, lock, req):
-                try:
-                    endpoint.func(req)
-                except Exception as e:
-                    # do any cleanup before re-raising user error
-                    raise e
-                finally:
-                    with self._background_task_cv:
-                        self._background_task_cv.notify_all()
-
-                        self._idle_start_time = time.time()
-                        self._last_inference_start_time = None
-                        lock.release()
-
-            thread = Thread(target=task, args=(endpoint, self._gpu_lock, req))
-            thread.start()
-
-            # send task start success message
-            res = make_response({'started': True})
-        else:
-            raise InvalidEndpointTypeException()
-
-        return res
-
-    # WARNING: cover depends on this being called so it should not be changed
-    def _read_event_chan(self) -> bool:
-        """
-        _read_event_chan essentially waits for a background task to finish, 
-        and then returns True
-        """
-        with self._background_task_cv:
-            # wait until the background task is done
-            self._background_task_cv.wait()
-        return True
 
     def _create_flask_app(self):
         flask_app = Flask(__name__)
@@ -253,20 +201,59 @@ class Potassium():
         @flask_app.route('/', defaults={'path': ''}, methods=["POST"])
         @flask_app.route('/<path:path>', methods=["POST"])
         def handle(path):
-            with self._sequence_number_lock:
-                self._sequence_number += 1
-
             route = "/" + path
             if route not in self._endpoints:
+                self._event_queue.put((StatusEvent.BAD_REQUEST_RECEIVED,))
                 abort(404)
 
             endpoint = self._endpoints[route]
-            return self._handle_generic(endpoint, request)
-        
+            request_id = request.headers.get("X-Banana-Request-Id", None)
+            if request_id is None:
+                request_id = str(uuid.uuid4())
+            try:
+                req = Request(
+                    headers=RequestHeaders(dict(request.headers.items())),
+                    json=request.get_json(),
+                    id=request_id
+                )
+            except:
+                res = make_response()
+                res.status_code = 400
+                self._event_queue.put((StatusEvent.BAD_REQUEST_RECEIVED,))
+                return res
+
+            self._event_queue.put((StatusEvent.INFERENCE_REQUEST_RECEIVED,))
+
+            assert self._worker_pool is not None, "Worker pool not initialized"
+            # use an internal id for critical path to prevent user from accidentally
+            # breaking things by sending multiple requests with the same id
+            internal_id = str(uuid.uuid4())
+            if endpoint.type == HandlerType.HANDLER:
+                self._worker_pool.apply_async(run_worker, args=(endpoint.func, req, internal_id, True))
+                resp = self._response_mailbox.get_response(internal_id)
+
+                flask_response = FlaskResponse(
+                    resp.body,
+                    status=resp.status,
+                    headers=resp.headers
+                )
+            elif endpoint.type == HandlerType.BACKGROUND:
+                self._worker_pool.apply_async(run_worker, args=(endpoint.func, req, internal_id))
+
+                flask_response = make_response({'started': True})
+            else:
+                raise InvalidEndpointTypeException()
+
+            return flask_response
+
         @flask_app.route('/_k/warmup', methods=["POST"])
         def warm():
-            with self._sequence_number_lock:
-                self._sequence_number += 1
+            request_id = str(uuid.uuid4())
+
+            # a bit of a hack but we need to send a start and end event to the event queue
+            # in order to update the status the way the load balancer expects
+            self._event_queue.put((StatusEvent.INFERENCE_REQUEST_RECEIVED,))
+            self._event_queue.put((StatusEvent.INFERENCE_END, request_id))
             res = make_response({
                 "warm": True,
             })
@@ -276,33 +263,61 @@ class Potassium():
         @flask_app.route('/_k/status', methods=["GET"])
         @flask_app.route('/__status__', methods=["GET"])
         def status():
-            idle_time = 0
-            inference_time = 0
-            gpu_available = not self._gpu_lock.locked()
-
-            if self._last_inference_start_time != None:
-                inference_time = int((time.time() - self._last_inference_start_time)*1000)
-
-            if gpu_available:
-                idle_time = int((time.time() - self._idle_start_time)*1000)
+            cur_status = self._status
 
             res = make_response({
-                "gpu_available": gpu_available,
-                "sequence_number": self._sequence_number,
-                "idle_time": idle_time,
-                "inference_time": inference_time,
+                "gpu_available": cur_status.gpu_available,
+                "sequence_number": cur_status.sequence_number,
+                "idle_time": int(cur_status.idle_time*1000),
+                "inference_time": int(cur_status.longest_inference_time*1000),
             })
 
             res.status_code = 200
             return res
 
         return flask_app
+    
+    def _init_server(self):
+        # unless the user has already set up logging, set up logging to stdout using
+        # a separate fd so that we don't get in the way of request logs
+        log = logging.getLogger('werkzeug')
+        if len(log.handlers) == 0:
+            # duplicate stdout
+            stdout_copy = os.dup(1)
+            # redirect flask logs to stdout_copy
+            log.addHandler(logging.StreamHandler(os.fdopen(stdout_copy, 'w')))
+
+        self._idle_start_time = time.time()
+        index_queue = ProcessQueue()
+        for i in range(self._num_workers):
+            index_queue.put(i)
+        if self._num_workers == 1:
+            Pool = ThreadPool
+        else:
+            Pool = ProcessPool
+        self._worker_pool = Pool(
+            self._num_workers,
+            init_worker, 
+            (
+                index_queue,
+                self._event_queue,
+                self._response_queue, 
+                self._init_func,
+                self._num_workers
+            )
+        )
+
+        while True:
+            if self._status.num_workers_started == self._num_workers:
+                break
+        print(colored(f"Started {self._num_workers} workers", 'green'))
 
     # serve runs the http server
     def serve(self, host="0.0.0.0", port=8000):
         print(colored("------\nStarting Potassium Server 🍌", 'yellow'))
-        self._init_func()
+        self._init_server()
         server = make_server(host, port, self._flask_app, threaded=True)
         print(colored(f"Serving at http://{host}:{port}\n------", 'green'))
-        self._idle_start_time = time.time()
+
         server.serve_forever()
+
